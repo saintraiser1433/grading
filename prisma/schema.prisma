@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum GradeSubmissionStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+enum Semester {
+  FIRST
+  SECOND
+  SUMMER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  middleName    String?
+  role          Role      @default(STUDENT)
+  studentId     String?   @unique
+  employeeId    String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  teachingClasses     Class[]           @relation("TeacherClasses")
+  enrollments         Enrollment[]
+  grades              Grade[]
+  gradeSubmissions    GradeSubmission[] @relation("TeacherSubmissions")
+  approvedSubmissions GradeSubmission[] @relation("AdminApprovals")
+
+  @@index([email])
+  @@index([studentId])
+  @@index([employeeId])
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  
+  subjects    Subject[]
+  classes     Class[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+}
+
+model SchoolYear {
+  id          String    @id @default(cuid())
+  year        String    // e.g., "2024-2025"
+  semester    Semester
+  isActive    Boolean   @default(false)
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  subjects          Subject[]
+  classes           Class[]
+  enrollments       Enrollment[]
+  gradeSubmissions  GradeSubmission[]
+
+  @@unique([year, semester])
+  @@index([isActive])
+}
+
+model Subject {
+  id              String      @id @default(cuid())
+  code            String      @unique
+  name            String
+  description     String?
+  units           Int         @default(3)
+  isOpen          Boolean     @default(false)
+  schoolYearId    String?
+  departmentId    String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  schoolYear      SchoolYear?  @relation(fields: [schoolYearId], references: [id])
+  department      Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  classes         Class[]
+  enrollments     Enrollment[]
+
+  @@index([code])
+  @@index([isOpen])
+  @@index([schoolYearId])
+  @@index([departmentId])
+}
+
+model Class {
+  id                String      @id @default(cuid())
+  name              String      // e.g., "BSCS 4 - SECTION A"
+  section           String
+  isIrregular       Boolean     @default(false)
+  
+  // Additional class information (from Excel format)
+  dayAndTime        String?     // e.g., "TUE - THU (11:30 - 2:30 PM | C201)"
+  room              String?
+  classSize         Int?
+  departmentHead    String?     // Name of department head
+  vpAcademics       String?     // Name of VP for Academics
+  
+  subjectId         String
+  teacherId         String
+  schoolYearId      String
+  departmentId      String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relations
+  subject           Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher           User         @relation("TeacherClasses", fields: [teacherId], references: [id])
+  schoolYear        SchoolYear   @relation(fields: [schoolYearId], references: [id])
+  department        Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  enrollments       Enrollment[]
+  gradingCriteria   GradingCriteria[]
+  grades            Grade[]
+  gradeSubmissions  GradeSubmission[]
+
+  @@unique([subjectId, section, schoolYearId])
+  @@index([teacherId])
+  @@index([schoolYearId])
+  @@index([departmentId])
+}
+
+// Main grading categories (Quizzes 40%, Class Standing 20%, Major Exam 40%)
+model GradingCriteria {
+  id                String    @id @default(cuid())
+  classId           String
+  name              String    // e.g., "QUIZZES", "CLASS STANDING", "MAJOR EXAM"
+  percentage        Float     // e.g., 40.0 for 40%
+  isMidterm         Boolean   @default(true) // true for midterm, false for final
+  order             Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  class             Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  componentDefinitions ComponentDefinition[]
+
+  @@index([classId])
+  @@index([isMidterm])
+}
+
+// Individual components within each category (Quiz 1, Quiz 2, Activity 1, etc.)
+model ComponentDefinition {
+  id          String   @id @default(cuid())
+  criteriaId  String
+  name        String   // e.g., "Quiz 1", "Activity 2", "Attendance"
+  maxScore    Float    // Maximum possible score (e.g., 10, 15, 20)
+  order       Int      @default(0) // Display order
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  criteria    GradingCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
+  scores      ComponentScore[]
+
+  @@index([criteriaId])
+}
+
+model Enrollment {
+  id              String      @id @default(cuid())
+  studentId       String
+  subjectId       String
+  classId         String?
+  schoolYearId    String
+  enrolledAt      DateTime    @default(now())
+  status          String      @default("ENROLLED") // ENROLLED, DROPPED, COMPLETED
+
+  // Relations
+  student         User        @relation(fields: [studentId], references: [id])
+  subject         Subject     @relation(fields: [subjectId], references: [id])
+  class           Class?      @relation(fields: [classId], references: [id])
+  schoolYear      SchoolYear  @relation(fields: [schoolYearId], references: [id])
+  grades          Grade[]
+
+  @@unique([studentId, subjectId, schoolYearId])
+  @@index([studentId])
+  @@index([classId])
+  @@index([schoolYearId])
+}
+
+model Grade {
+  id              String      @id @default(cuid())
+  enrollmentId    String
+  studentId       String
+  classId         String
+  isMidterm       Boolean     @default(true)
+  
+  // Final calculated grades (1.0 - 5.0 scale)
+  midtermGrade    Float?      // Midterm grade (1.0 - 5.0)
+  finalGrade      Float?      // Final grade (1.0 - 5.0)
+  overallGrade    Float?      // Overall/Semester grade (1.0 - 5.0)
+  remarks         String?     // PASSED, FAILED, INC, etc.
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  enrollment      Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  student         User        @relation(fields: [studentId], references: [id])
+  class           Class       @relation(fields: [classId], references: [id])
+  componentScores ComponentScore[]
+
+  @@unique([enrollmentId, isMidterm])
+  @@index([studentId])
+  @@index([classId])
+}
+
+// Individual scores for each component (Quiz 1 score, Activity 2 score, etc.)
+model ComponentScore {
+  id                  String      @id @default(cuid())
+  gradeId             String
+  componentDefId      String
+  score               Float       // Actual score received
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  // Relations
+  grade               Grade       @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  componentDefinition ComponentDefinition @relation(fields: [componentDefId], references: [id])
+
+  @@unique([gradeId, componentDefId])
+  @@index([gradeId])
+  @@index([componentDefId])
+}
+
+model GradeSubmission {
+  id              String                @id @default(cuid())
+  classId         String
+  teacherId       String
+  schoolYearId    String
+  submittedAt     DateTime              @default(now())
+  status          GradeSubmissionStatus @default(PENDING)
+  approvedBy      String?
+  approvedAt      DateTime?
+  comments        String?
+  isMidterm       Boolean               @default(false)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  class           Class                 @relation(fields: [classId], references: [id])
+  teacher         User                  @relation("TeacherSubmissions", fields: [teacherId], references: [id])
+  schoolYear      SchoolYear            @relation(fields: [schoolYearId], references: [id])
+  approver        User?                 @relation("AdminApprovals", fields: [approvedBy], references: [id])
+
+  @@index([classId])
+  @@index([teacherId])
+  @@index([status])
+  @@index([schoolYearId])
+}
+
