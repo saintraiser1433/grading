@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, BookOpen, Calendar, FileCheck, TrendingUp, TrendingDown, GraduationCap, Clock } from "lucide-react"
+import { Users, BookOpen, Calendar, FileCheck, TrendingUp, TrendingDown, GraduationCap, Clock, Percent, UserPlus } from "lucide-react"
 import { AdminCharts } from "@/components/admin/admin-charts"
 import { RecentActivities } from "@/components/admin/recent-activities"
 
@@ -308,6 +308,30 @@ export default async function AdminDashboard() {
               <div>
                 <p className="font-medium">Grade Reviews</p>
                 <p className="text-xs text-muted-foreground">{pendingSubmissions} pending</p>
+              </div>
+            </a>
+            <a
+              href="/admin/grading-criteria"
+              className="group flex items-center gap-3 rounded-lg border p-4 transition-all hover:border-primary hover:shadow-sm"
+            >
+              <div className="rounded-full bg-indigo-50 p-3 transition-colors group-hover:bg-indigo-100">
+                <Percent className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="font-medium">Grading Criteria</p>
+                <p className="text-xs text-muted-foreground">Set global criteria</p>
+              </div>
+            </a>
+            <a
+              href="/admin/assign-subjects"
+              className="group flex items-center gap-3 rounded-lg border p-4 transition-all hover:border-primary hover:shadow-sm"
+            >
+              <div className="rounded-full bg-purple-50 p-3 transition-colors group-hover:bg-purple-100">
+                <UserPlus className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="font-medium">Assign Subjects</p>
+                <p className="text-xs text-muted-foreground">Assign subjects to teachers</p>
               </div>
             </a>
           </div>

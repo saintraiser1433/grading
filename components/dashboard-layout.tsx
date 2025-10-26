@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
@@ -17,6 +17,7 @@ import {
   X,
   Settings,
   ChevronDown,
+  Percent,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,12 +38,14 @@ const adminNavigation = [
   { name: "Faculty", href: "/admin/faculty", icon: Users },
   { name: "Subjects", href: "/admin/subjects", icon: BookOpen },
   { name: "School Years", href: "/admin/school-years", icon: Calendar },
+  { name: "Grading Criteria", href: "/admin/grading-criteria", icon: Percent },
   { name: "Grade Submissions", href: "/admin/submissions", icon: FileCheck },
 ]
 
 const teacherNavigation = [
   { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
   { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
+  { name: "Grading Components", href: "/teacher/grading-components", icon: Settings },
   { name: "Grade Submissions", href: "/teacher/submissions", icon: FileCheck },
 ]
 
@@ -56,6 +59,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  // Load sidebar state from localStorage on mount
+  useEffect(() => {
+    const savedState = localStorage.getItem('sidebarCollapsed')
+    if (savedState !== null) {
+      setSidebarCollapsed(JSON.parse(savedState))
+    }
+  }, [])
+
+  // Save sidebar state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed))
+  }, [sidebarCollapsed])
 
   const navigation =
     session?.user.role === "ADMIN"
@@ -85,8 +102,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 transform bg-background border-r shadow-lg transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-50 transform bg-background border-r shadow-lg transition-all duration-300 ease-in-out lg:relative lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          sidebarCollapsed ? "w-16" : "w-64"
         )}
       >
         <div className="flex h-full flex-col">
@@ -94,25 +112,38 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-16 items-center justify-between border-b px-6">
             <div className="flex items-center gap-3">
               <Image
-                src="/app/assets/images/gitlogo.png"
+                src="/gitlogo.png"
                 alt="GIT Logo"
                 width={40}
                 height={40}
                 className="rounded-full"
               />
-              <div>
-                <h1 className="text-lg font-bold">GGS</h1>
-                <p className="text-xs text-muted-foreground">Grading System</p>
-              </div>
+              {!sidebarCollapsed && (
+                <div>
+                  <h1 className="text-lg font-bold">GGS</h1>
+                  <p className="text-xs text-muted-foreground">Grading System</p>
+                </div>
+              )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden lg:flex"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
 
           {/* Navigation */}
@@ -133,12 +164,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                     isActive
                       ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                      : "text-foreground hover:bg-accent hover:text-accent-foreground",
+                    sidebarCollapsed ? "justify-center" : ""
                   )}
                   onClick={() => setSidebarOpen(false)}
+                  title={sidebarCollapsed ? item.name : undefined}
                 >
                   <item.icon className="h-5 w-5" />
-                  {item.name}
+                  {!sidebarCollapsed && item.name}
                 </Link>
               )
             })}
@@ -150,18 +183,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 hover:bg-accent"
+                  className={cn(
+                    "w-full gap-3 hover:bg-accent",
+                    sidebarCollapsed ? "justify-center" : "justify-start"
+                  )}
                 >
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary text-primary-foreground">
                       {session?.user.name ? getInitials(session.user.name) : "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium">{session?.user.name}</p>
-                    <p className="text-xs text-muted-foreground">{session?.user.role}</p>
-                  </div>
-                  <ChevronDown className="h-4 w-4" />
+                  {!sidebarCollapsed && (
+                    <>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium">{session?.user.name}</p>
+                        <p className="text-xs text-muted-foreground">{session?.user.role}</p>
+                      </div>
+                      <ChevronDown className="h-4 w-4" />
+                    </>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -188,26 +228,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className={cn(
+        "flex flex-1 flex-col overflow-hidden transition-all duration-300 ease-in-out",
+        sidebarCollapsed ? "lg:ml-0" : "lg:ml-0"
+      )}>
         {/* Header */}
         <header className="flex h-16 items-center justify-between border-b bg-background px-6 shadow-sm">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="lg:hidden"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-6 w-6" />
-          </Button>
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-semibold">
-              {navigation.find((item) => {
-                const isDashboard = item.href === "/admin" || item.href === "/teacher" || item.href === "/student"
-                return isDashboard 
-                  ? pathname === item.href 
-                  : pathname === item.href || pathname.startsWith(item.href + "/")
-              })?.name || "Dashboard"}
-            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="lg:hidden"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-6 w-6" />
+            </Button>
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />

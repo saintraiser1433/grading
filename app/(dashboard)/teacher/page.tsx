@@ -21,7 +21,6 @@ export default async function TeacherDashboard() {
     totalStudents,
     pendingSubmissions,
     approvedSubmissions,
-    totalGradingCriteria,
     activeSchoolYear,
   ] = await Promise.all([
     prisma.class.findMany({
@@ -32,7 +31,6 @@ export default async function TeacherDashboard() {
         _count: {
           select: {
             enrollments: true,
-            gradingCriteria: true,
           },
         },
       },
@@ -57,13 +55,7 @@ export default async function TeacherDashboard() {
         status: "APPROVED",
       },
     }),
-    prisma.gradingCriteria.count({
-      where: {
-        class: {
-          teacherId: session.user.id,
-        },
-      },
-    }),
+    0, // Removed grading criteria count as it's now admin-only
     prisma.schoolYear.findFirst({ where: { isActive: true } }),
   ])
 
@@ -241,11 +233,6 @@ export default async function TeacherDashboard() {
                         {classItem._count.enrollments}
                       </div>
                     </div>
-                    {classItem._count.gradingCriteria === 0 && (
-                      <Badge variant="secondary" className="w-full justify-center text-xs">
-                        Setup grading criteria
-                      </Badge>
-                    )}
                   </div>
                 </Link>
               ))}

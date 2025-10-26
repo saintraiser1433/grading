@@ -317,3 +317,65 @@ export async function getGradeSubmissions(teacherId?: string) {
   }
 }
 
+// New function to create/update grades with grade types
+export async function createOrUpdateGradeWithType(
+  enrollmentId: string,
+  classId: string,
+  studentId: string,
+  gradeTypeId: string,
+  finalGrade?: number,
+  remarks?: string
+) {
+  try {
+    console.log("createOrUpdateGradeWithType called with:", {
+      enrollmentId,
+      classId,
+      studentId,
+      gradeTypeId,
+      finalGrade,
+      remarks
+    })
+
+    // Check if grade already exists
+    let grade = await prisma.grade.findFirst({
+      where: {
+        enrollmentId,
+        classId,
+        gradeTypeId,
+      },
+    })
+
+    console.log("Existing grade found:", grade)
+
+    if (grade) {
+      // Update existing grade
+      grade = await prisma.grade.update({
+        where: { id: grade.id },
+        data: {
+          grade: finalGrade,
+          remarks,
+        },
+      })
+      console.log("Grade updated:", grade)
+    } else {
+      // Create new grade
+      grade = await prisma.grade.create({
+        data: {
+          enrollmentId,
+          classId,
+          studentId,
+          gradeTypeId,
+          grade: finalGrade,
+          remarks,
+        },
+      })
+      console.log("Grade created:", grade)
+    }
+
+    return { success: true, data: grade }
+  } catch (error) {
+    console.error("Error in createOrUpdateGradeWithType:", error)
+    return { success: false, error: `Failed to create/update grade: ${error.message}` }
+  }
+}
+

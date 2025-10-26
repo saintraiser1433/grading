@@ -182,6 +182,12 @@ export function SubmissionsTable({ submissions, adminId }: SubmissionsTableProps
                 Copy submission ID
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => window.open(`/admin/submissions/${submission.id}/view`, '_blank')}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                View Grades
+              </DropdownMenuItem>
               {submission.status === "PENDING" && (
                 <>
                   <DropdownMenuItem onClick={() => openDialog(submission, "approve")}>

@@ -277,114 +277,40 @@ async function main() {
     const midtermGrade = Math.round((quizzesWE + classStandingWE + projectWE + examWE) * 4) / 4
     const remarks = midtermGrade <= 3.0 ? "PASSED" : "FAILED"
 
+    // Get the midterm grade type
+    const midtermGradeType = await prisma.gradeType.findFirst({
+      where: { name: "Midterm" }
+    })
+
+    if (!midtermGradeType) {
+      console.log("❌ Midterm grade type not found, skipping grade creation")
+      continue
+    }
+
     // Create or update grade record for midterm
     const grade = await prisma.grade.upsert({
       where: {
-        enrollmentId_isMidterm: {
+        enrollmentId_gradeTypeId: {
           enrollmentId: enrollment.id,
-          isMidterm: true,
+          gradeTypeId: midtermGradeType.id,
         },
       },
       update: {
-        midtermGrade: midtermGrade,
+        grade: midtermGrade,
         remarks: remarks,
       },
       create: {
         enrollmentId: enrollment.id,
         studentId: student.id,
         classId: classData.id,
-        isMidterm: true,
-        midtermGrade: midtermGrade,
-        finalGrade: null,
-        overallGrade: null,
+        gradeTypeId: midtermGradeType.id,
+        grade: midtermGrade,
         remarks: remarks,
       },
     })
 
-    // Create or update grade components (one per criteria)
-    await prisma.gradeComponent.upsert({
-      where: {
-        gradeId_criteriaId: {
-          gradeId: grade.id,
-          criteriaId: quizzesCriteria.id,
-        },
-      },
-      update: {
-        score: quizzesScore,
-        maxScore: 45,
-        percentage: quizzesPercentage,
-      },
-      create: {
-        gradeId: grade.id,
-        criteriaId: quizzesCriteria.id,
-        score: quizzesScore,
-        maxScore: 45,
-        percentage: quizzesPercentage,
-      },
-    })
-
-    await prisma.gradeComponent.upsert({
-      where: {
-        gradeId_criteriaId: {
-          gradeId: grade.id,
-          criteriaId: classStandingCriteria.id,
-        },
-      },
-      update: {
-        score: classStandingScore,
-        maxScore: 45,
-        percentage: classStandingPercentage,
-      },
-      create: {
-        gradeId: grade.id,
-        criteriaId: classStandingCriteria.id,
-        score: classStandingScore,
-        maxScore: 45,
-        percentage: classStandingPercentage,
-      },
-    })
-
-    await prisma.gradeComponent.upsert({
-      where: {
-        gradeId_criteriaId: {
-          gradeId: grade.id,
-          criteriaId: projectsCriteria.id,
-        },
-      },
-      update: {
-        score: projectScore,
-        maxScore: 50,
-        percentage: projectPercentage,
-      },
-      create: {
-        gradeId: grade.id,
-        criteriaId: projectsCriteria.id,
-        score: projectScore,
-        maxScore: 50,
-        percentage: projectPercentage,
-      },
-    })
-
-    await prisma.gradeComponent.upsert({
-      where: {
-        gradeId_criteriaId: {
-          gradeId: grade.id,
-          criteriaId: examCriteria.id,
-        },
-      },
-      update: {
-        score: examScore,
-        maxScore: 60,
-        percentage: examPercentage,
-      },
-      create: {
-        gradeId: grade.id,
-        criteriaId: examCriteria.id,
-        score: examScore,
-        maxScore: 60,
-        percentage: examPercentage,
-      },
-    })
+    // Component scores are now managed through the global grading system
+    // Individual component scores are created when teachers enter grades
 
     if ((i + 1) % 10 === 0) {
       console.log(`  ✓ Created grades for ${i + 1} students...`)

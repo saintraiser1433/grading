@@ -4,7 +4,7 @@ import { useState } from "react"
 import { User } from "@prisma/client"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Edit, Trash2, Mail, MoreHorizontal } from "lucide-react"
+import { Edit, Trash2, Mail, MoreHorizontal, BookOpen } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -128,6 +128,12 @@ export function FacultyTable({ teachers }: FacultyTableProps) {
                 >
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => router.push(`/admin/assign-subjects?teacher=${teacher.id}`)}
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Assign Subjects
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setDeleteId(teacher.id)}
