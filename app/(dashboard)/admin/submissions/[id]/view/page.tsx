@@ -108,6 +108,12 @@ export default async function ViewSubmissionPage({ params }: ViewSubmissionPageP
     orderBy: { order: 'asc' }
   })
 
+  // Construct proper classData object with schoolYear included
+  const classData = {
+    ...submission.class,
+    schoolYear: submission.schoolYear
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "PENDING":
@@ -203,10 +209,11 @@ export default async function ViewSubmissionPage({ params }: ViewSubmissionPageP
             isMidterm={submission.gradeType?.name?.toLowerCase() === 'midterm'}
             enrollments={enrollments}
             criteria={globalCriteria}
-            classData={submission.class}
+            classData={classData}
             gradeType={submission.gradeType}
             allGradeTypes={allGradeTypes}
             isReadOnly={true}
+            showApprovalButtons={false}
             submissionId={submission.id}
             adminId={session.user.id}
           />

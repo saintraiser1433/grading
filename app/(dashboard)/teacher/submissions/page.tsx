@@ -5,6 +5,9 @@ import { getGradeSubmissions } from "@/lib/actions/grade.actions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TeacherSubmissionsTable } from "@/components/teacher/submissions-table"
 
+// Force dynamic rendering to prevent caching issues
+export const dynamic = 'force-dynamic'
+
 export default async function TeacherSubmissionsPage() {
   const session = await getServerSession(authOptions)
 
@@ -24,14 +27,18 @@ export default async function TeacherSubmissionsPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Submission History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <TeacherSubmissionsTable submissions={submissions} />
-        </CardContent>
-      </Card>
+      {submissions.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Submission History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TeacherSubmissionsTable submissions={submissions} />
+          </CardContent>
+        </Card>
+      ) : (
+        <TeacherSubmissionsTable submissions={submissions} />
+      )}
     </div>
   )
 }

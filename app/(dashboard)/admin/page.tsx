@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, BookOpen, Calendar, FileCheck, TrendingUp, TrendingDown, GraduationCap, Clock, Percent, UserPlus } from "lucide-react"
+import { Users, BookOpen, Calendar, FileCheck, TrendingUp, TrendingDown, GraduationCap, Clock, Percent, UserPlus, Building2, Settings } from "lucide-react"
 import { AdminCharts } from "@/components/admin/admin-charts"
 import { RecentActivities } from "@/components/admin/recent-activities"
 
@@ -332,6 +332,42 @@ export default async function AdminDashboard() {
               <div>
                 <p className="font-medium">Assign Subjects</p>
                 <p className="text-xs text-muted-foreground">Assign subjects to teachers</p>
+              </div>
+            </a>
+            <a
+              href="/admin/department-heads"
+              className="group flex items-center gap-3 rounded-lg border p-4 transition-all hover:border-primary hover:shadow-sm"
+            >
+              <div className="rounded-full bg-blue-50 p-3 transition-colors group-hover:bg-blue-100">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-medium">Department Heads</p>
+                <p className="text-xs text-muted-foreground">Manage department heads</p>
+              </div>
+            </a>
+            <a
+              href="/admin/departments"
+              className="group flex items-center gap-3 rounded-lg border p-4 transition-all hover:border-primary hover:shadow-sm"
+            >
+              <div className="rounded-full bg-indigo-50 p-3 transition-colors group-hover:bg-indigo-100">
+                <Building2 className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="font-medium">Departments</p>
+                <p className="text-xs text-muted-foreground">Manage academic departments</p>
+              </div>
+            </a>
+            <a
+              href="/admin/settings"
+              className="group flex items-center gap-3 rounded-lg border p-4 transition-all hover:border-primary hover:shadow-sm"
+            >
+              <div className="rounded-full bg-gray-50 p-3 transition-colors group-hover:bg-gray-100">
+                <Settings className="h-5 w-5 text-gray-600" />
+              </div>
+              <div>
+                <p className="font-medium">Settings</p>
+                <p className="text-xs text-muted-foreground">Global system settings</p>
               </div>
             </a>
           </div>

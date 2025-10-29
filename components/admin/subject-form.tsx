@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { SchoolYear } from "@prisma/client"
+import { SchoolYear, User } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -152,6 +152,7 @@ export function SubjectForm({ schoolYears }: SubjectFormProps) {
             </SelectContent>
           </Select>
         </div>
+
 
         <div className="space-y-2">
           <Label htmlFor="isOpen">Open for Enrollment</Label>

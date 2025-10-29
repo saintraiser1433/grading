@@ -45,12 +45,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900 px-4 py-12 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4 text-center">
           <div className="mx-auto flex items-center justify-center">
             <Image
-              src="/app/assets/images/gitlogo.png"
+              src="/gitlogo.png"
               alt="GIT Logo"
               width={80}
               height={80}
@@ -58,8 +58,8 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">GIT Grading System</CardTitle>
-            <CardDescription className="mt-2">
+            <CardTitle className="text-2xl font-bold text-slate-900 dark:text-slate-100">GIT Grading System</CardTitle>
+            <CardDescription className="mt-2 text-slate-600 dark:text-slate-400">
               Sign in to your account to continue
             </CardDescription>
           </div>
@@ -73,7 +73,7 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -86,7 +86,7 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -106,17 +106,25 @@ export default function LoginPage() {
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
 
-            <div className="text-center text-sm text-gray-500">
-              <Link href="/auth/forgot" className="hover:text-primary">
-                Forgot password?
-              </Link>
+            <div className="text-center text-sm text-gray-500 dark:text-slate-400 space-y-2">
+              <div>
+                <Link href="/auth/forgot" className="hover:text-primary dark:hover:text-primary-foreground">
+                  Forgot password?
+                </Link>
+              </div>
+              <div>
+                Don't have an account?{" "}
+                <Link href="/auth/register" className="hover:text-primary dark:hover:text-primary-foreground font-medium">
+                  Sign up here
+                </Link>
+              </div>
             </div>
           </form>
 
           {/* Demo Credentials */}
-          <div className="mt-6 space-y-2 rounded-lg bg-gray-50 p-4">
-            <p className="text-xs font-semibold text-gray-700">Demo Credentials:</p>
-            <div className="space-y-1 text-xs text-gray-600">
+          <div className="mt-6 space-y-2 rounded-lg bg-gray-50 dark:bg-slate-800 p-4">
+            <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Demo Credentials:</p>
+            <div className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
               <p>Admin: admin@git.edu / admin123</p>
               <p>Teacher: teacher@git.edu / teacher123</p>
               <p>Student: student@git.edu / student123</p>

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { getStudentEnrollments } from "@/lib/actions/enrollment.actions"
 import { getSchoolYears } from "@/lib/actions/schoolyear.actions"
+import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
@@ -24,9 +25,14 @@ export default async function StudentGradesPage({
     redirect("/dashboard")
   }
 
-  const [enrollmentsResult, schoolYearsResult] = await Promise.all([
-    getStudentEnrollments(session.user.id, searchParams.sy),
+  const [enrollmentsResult, schoolYearsResult, gradeTypesResult] = await Promise.all([
+    getStudentEnrollments(session.user.id, searchParams.sy === "all" ? undefined : searchParams.sy),
     getSchoolYears(),
+    prisma.gradeType.findMany({
+      where: { isActive: true },
+      orderBy: { order: "asc" },
+      select: { name: true, percentage: true }
+    })
   ])
 
   const enrollments = enrollmentsResult.success ? enrollmentsResult.data : []
@@ -50,12 +56,12 @@ export default async function StudentGradesPage({
           </CardHeader>
           <CardContent>
             <form action="/student/grades" method="get">
-              <Select name="sy" defaultValue={searchParams.sy || ""}>
+              <Select name="sy" defaultValue={searchParams.sy || "all"}>
                 <SelectTrigger className="w-full md:w-[300px]">
                   <SelectValue placeholder="All school years" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All school years</SelectItem>
+                  <SelectItem value="all">All school years</SelectItem>
                   {schoolYears.map((sy) => (
                     <SelectItem key={sy.id} value={sy.id}>
                       {sy.year} - {sy.semester} Semester
@@ -73,7 +79,10 @@ export default async function StudentGradesPage({
           <CardTitle>Grades Summary</CardTitle>
         </CardHeader>
         <CardContent>
-          <GradesTable enrollments={enrollments} />
+          <GradesTable 
+            enrollments={enrollments} 
+            availableGradeTypes={gradeTypesResult}
+          />
         </CardContent>
       </Card>
     </div>

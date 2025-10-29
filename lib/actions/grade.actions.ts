@@ -6,8 +6,12 @@ import { z } from "zod"
 import {
   CreateGradingCriteriaSchema,
   UpdateGradeComponentSchema,
+  CreateComponentDefinitionSchema,
+  UpdateComponentDefinitionSchema,
   type CreateGradingCriteriaInput,
   type UpdateGradeComponentInput,
+  type CreateComponentDefinitionInput,
+  type UpdateComponentDefinitionInput,
 } from "@/lib/schemas"
 
 export async function createGradingCriteria(data: CreateGradingCriteriaInput) {
@@ -230,14 +234,14 @@ export async function getClassGrades(classId: string, isMidterm: boolean) {
   }
 }
 
-export async function submitGrades(classId: string, teacherId: string, schoolYearId: string, isMidterm: boolean) {
+export async function submitGrades(classId: string, teacherId: string, schoolYearId: string, gradeTypeId: string) {
   try {
     const submission = await prisma.gradeSubmission.create({
       data: {
         classId,
         teacherId,
         schoolYearId,
-        isMidterm,
+        gradeTypeId,
         status: "PENDING",
       },
       include: {
@@ -246,13 +250,40 @@ export async function submitGrades(classId: string, teacherId: string, schoolYea
             subject: true,
           },
         },
+        gradeType: true,
       },
     })
 
     revalidatePath("/teacher/classes")
+    revalidatePath("/teacher/classes/[id]")
+    revalidatePath("/teacher/submissions")
+    revalidatePath("/admin/submissions")
     return { success: true, data: submission }
   } catch (error) {
     return { success: false, error: "Failed to submit grades" }
+  }
+}
+
+export async function getPendingGradeSubmissions() {
+  try {
+    const submissions = await prisma.gradeSubmission.findMany({
+      where: { status: "PENDING" },
+      include: {
+        class: {
+          include: {
+            subject: true,
+            teacher: true,
+          },
+        },
+        gradeType: true,
+        schoolYear: true,
+      },
+      orderBy: { submittedAt: "desc" },
+    })
+
+    return { success: true, data: submissions }
+  } catch (error) {
+    return { success: false, error: "Failed to fetch pending submissions" }
   }
 }
 
@@ -266,9 +297,20 @@ export async function approveGradeSubmission(id: string, approverId: string, com
         approvedAt: new Date(),
         comments,
       },
+      include: {
+        class: {
+          include: {
+            subject: true,
+          },
+        },
+        gradeType: true,
+      },
     })
 
     revalidatePath("/admin/submissions")
+    revalidatePath("/teacher/submissions")
+    revalidatePath("/teacher/classes")
+    revalidatePath("/student/grades")
     return { success: true, data: submission }
   } catch (error) {
     return { success: false, error: "Failed to approve submission" }
@@ -285,14 +327,25 @@ export async function declineGradeSubmission(id: string, approverId: string, com
         approvedAt: new Date(),
         comments,
       },
+      include: {
+        class: {
+          include: {
+            subject: true,
+          },
+        },
+        gradeType: true,
+      },
     })
 
     revalidatePath("/admin/submissions")
+    revalidatePath("/teacher/submissions")
+    revalidatePath("/teacher/classes")
     return { success: true, data: submission }
   } catch (error) {
     return { success: false, error: "Failed to decline submission" }
   }
 }
+
 
 export async function getGradeSubmissions(teacherId?: string) {
   try {
@@ -307,6 +360,11 @@ export async function getGradeSubmissions(teacherId?: string) {
         teacher: true,
         schoolYear: true,
         approver: true,
+        gradeType: {
+          select: {
+            name: true,
+          },
+        },
       },
       orderBy: { submittedAt: "desc" },
     })
@@ -376,6 +434,134 @@ export async function createOrUpdateGradeWithType(
   } catch (error) {
     console.error("Error in createOrUpdateGradeWithType:", error)
     return { success: false, error: `Failed to create/update grade: ${error.message}` }
+  }
+}
+
+// Component Definition Actions
+export async function createComponentDefinition(data: CreateComponentDefinitionInput) {
+  try {
+    const validated = CreateComponentDefinitionSchema.parse(data)
+
+    const component = await prisma.componentDefinition.create({
+      data: validated,
+    })
+
+    revalidatePath("/teacher/classes")
+    return { success: true, data: component }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message }
+    }
+    return { success: false, error: "Failed to create component definition" }
+  }
+}
+
+export async function updateComponentDefinition(id: string, data: UpdateComponentDefinitionInput) {
+  try {
+    const validated = UpdateComponentDefinitionSchema.parse({ ...data, id })
+
+    const component = await prisma.componentDefinition.update({
+      where: { id },
+      data: validated,
+    })
+
+    revalidatePath("/teacher/classes")
+    return { success: true, data: component }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message }
+    }
+    return { success: false, error: "Failed to update component definition" }
+  }
+}
+
+export async function deleteComponentDefinition(id: string) {
+  try {
+    await prisma.componentDefinition.delete({
+      where: { id },
+    })
+
+    revalidatePath("/teacher/classes")
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: "Failed to delete component definition" }
+  }
+}
+
+export async function getComponentDefinitions(criteriaId: string) {
+  try {
+    const components = await prisma.componentDefinition.findMany({
+      where: { criteriaId },
+      orderBy: { order: "asc" },
+    })
+
+    return { success: true, data: components }
+  } catch (error) {
+    return { success: false, error: "Failed to fetch component definitions" }
+  }
+}
+
+// Global Component Definition Actions
+export async function createGlobalComponentDefinition(data: CreateComponentDefinitionInput) {
+  try {
+    const validated = CreateComponentDefinitionSchema.parse(data)
+
+    const component = await prisma.globalComponentDefinition.create({
+      data: validated,
+    })
+
+    revalidatePath("/admin/grading-criteria")
+    return { success: true, data: component }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message }
+    }
+    return { success: false, error: "Failed to create global component definition" }
+  }
+}
+
+export async function updateGlobalComponentDefinition(id: string, data: UpdateComponentDefinitionInput) {
+  try {
+    const validated = UpdateComponentDefinitionSchema.parse({ ...data, id })
+
+    const component = await prisma.globalComponentDefinition.update({
+      where: { id },
+      data: validated,
+    })
+
+    revalidatePath("/admin/grading-criteria")
+    return { success: true, data: component }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message }
+    }
+    return { success: false, error: "Failed to update global component definition" }
+  }
+}
+
+export async function deleteGlobalComponentDefinition(id: string) {
+  try {
+    await prisma.globalComponentDefinition.delete({
+      where: { id },
+    })
+
+    revalidatePath("/admin/grading-criteria")
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: "Failed to delete global component definition" }
+  }
+}
+
+export async function getGlobalComponentDefinitions(criteriaId: string) {
+  try {
+    const components = await prisma.globalComponentDefinition.findMany({
+      where: { criteriaId },
+      orderBy: { order: "asc" },
+    })
+
+    return { success: true, data: components }
+  } catch (error) {
+    return { success: false, error: "Failed to fetch global component definitions" }
   }
 }
 

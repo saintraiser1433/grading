@@ -455,7 +455,7 @@ All requested features have been implemented:
 
 ## 💡 Tips for Customization
 
-- **Logo:** Replace `/app/assets/images/gitlogo.png`
+- **Logo:** Replace `/gitlogo.png`
 - **Colors:** Edit `tailwind.config.js`
 - **Passing Grade:** Change in `lib/actions/grade.actions.ts` (currently 75%)
 - **Grading Criteria:** Teachers can customize per class

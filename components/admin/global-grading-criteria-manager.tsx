@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AlertCircle, Plus, Edit, Trash2, Percent, CheckCircle2, XCircle, Settings, ToggleLeft, ToggleRight } from "lucide-react"
+import { AlertCircle, Plus, Edit, Trash2, Percent, CheckCircle2, XCircle, Settings, ToggleLeft, ToggleRight, BookOpen, Target } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,7 @@ import {
 } from "@/lib/actions/global-grading.actions"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface GlobalGradingCriteriaManagerProps {
   gradeTypes: GradeType[]
@@ -304,9 +305,17 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
               </div>
 
               {gradeTypes.length === 0 ? (
-                <div className="text-center py-8 border rounded-lg bg-muted/50">
-                  <p className="text-muted-foreground">No grade types yet. Add your first one!</p>
-                </div>
+                <EmptyState
+                  icon={BookOpen}
+                  title="No Grade Types"
+                  description="Create your first grade type to get started with grading criteria management."
+                  action={
+                    <Button onClick={() => setOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Grade Type
+                    </Button>
+                  }
+                />
               ) : (
                 <div className="grid gap-3">
                   {gradeTypes.map((gradeType) => (
@@ -418,9 +427,17 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
               </div>
 
               {globalCriteria.length === 0 ? (
-                <div className="text-center py-8 border rounded-lg bg-muted/50">
-                  <p className="text-muted-foreground">No grading criteria yet. Add your first one!</p>
-                </div>
+                <EmptyState
+                  icon={Target}
+                  title="No Grading Criteria"
+                  description="Set up grading criteria for different grade types to define how grades are calculated."
+                  action={
+                    <Button onClick={() => setOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Criteria
+                    </Button>
+                  }
+                />
               ) : (
                 <div className="space-y-4">
                   {gradeTypes.map((gradeType) => {

@@ -5,10 +5,21 @@ import { Subject, SchoolYear } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { BookOpen, CheckCircle } from "lucide-react"
+import { BookOpen, CheckCircle, AlertCircle } from "lucide-react"
 import { createEnrollment } from "@/lib/actions/enrollment.actions"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface EnrollmentFormProps {
   subjects: (Subject & { schoolYear: SchoolYear | null })[]
@@ -18,33 +29,38 @@ interface EnrollmentFormProps {
 
 export function EnrollmentForm({ subjects, studentId, schoolYearId }: EnrollmentFormProps) {
   const [enrolling, setEnrolling] = useState<string | null>(null)
+  const [confirmingSubject, setConfirmingSubject] = useState<Subject | null>(null)
   const router = useRouter()
   const { toast } = useToast()
 
-  const handleEnroll = async (subjectId: string) => {
-    setEnrolling(subjectId)
+  const handleEnroll = async (subject: Subject) => {
+    setEnrolling(subject.id)
 
     const result = await createEnrollment({
       studentId,
-      subjectId,
+      subjectId: subject.id,
       schoolYearId,
+      status: "PENDING",
     })
 
     if (result.success) {
       toast({
-        title: "Success",
-        description: "Successfully enrolled in subject",
+        title: "✅ Enrollment Request Submitted",
+        description: `You have successfully requested enrollment in ${subject.code} - ${subject.name}. Your request is pending teacher approval.`,
+        duration: 5000,
       })
       router.refresh()
     } else {
       toast({
-        title: "Error",
-        description: result.error || "Failed to enroll in subject",
+        title: "❌ Enrollment Failed",
+        description: result.error || "Failed to enroll in subject. Please try again.",
         variant: "destructive",
+        duration: 5000,
       })
     }
 
     setEnrolling(null)
+    setConfirmingSubject(null)
   }
 
   return (
@@ -70,20 +86,55 @@ export function EnrollmentForm({ subjects, studentId, schoolYearId }: Enrollment
                 </div>
               </div>
             </div>
-            <Button
-              className="w-full mt-4"
-              onClick={() => handleEnroll(subject.id)}
-              disabled={enrolling === subject.id}
-            >
-              {enrolling === subject.id ? (
-                "Enrolling..."
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Enroll
-                </>
-              )}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  className="w-full mt-4"
+                  disabled={enrolling === subject.id}
+                  onClick={() => setConfirmingSubject(subject)}
+                >
+                  {enrolling === subject.id ? (
+                    "Enrolling..."
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Enroll
+                    </>
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-blue-600" />
+                    Confirm Enrollment
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-base">
+                    Are you sure you want to enroll in <strong>{subject.code} - {subject.name}</strong>?
+                    <br /><br />
+                    <span className="text-sm text-gray-600">
+                      • This will submit an enrollment request that requires teacher approval
+                      <br />
+                      • You will be notified once your enrollment is approved or rejected
+                      <br />
+                      • You can view your enrollment status in your dashboard
+                    </span>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setConfirmingSubject(null)}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => handleEnroll(subject)}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Confirm Enrollment
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       ))}

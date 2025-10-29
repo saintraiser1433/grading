@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "GIT Grading System - GGS",
+  title: "GIT Grading System",
   description: "Glam Institute of Technology Grading System",
 }
 

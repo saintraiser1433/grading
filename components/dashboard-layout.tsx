@@ -18,6 +18,8 @@ import {
   Settings,
   ChevronDown,
   Percent,
+  Building2,
+  Award,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,17 +37,21 @@ import { ThemeToggle } from "@/components/theme-toggle"
 
 const adminNavigation = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { name: "Students", href: "/admin/students", icon: GraduationCap },
   { name: "Faculty", href: "/admin/faculty", icon: Users },
   { name: "Subjects", href: "/admin/subjects", icon: BookOpen },
   { name: "School Years", href: "/admin/school-years", icon: Calendar },
+  { name: "Grade Types", href: "/admin/grade-types", icon: Award },
   { name: "Grading Criteria", href: "/admin/grading-criteria", icon: Percent },
   { name: "Grade Submissions", href: "/admin/submissions", icon: FileCheck },
+  { name: "Departments", href: "/admin/departments", icon: Building2 },
+  { name: "Department Heads", href: "/admin/department-heads", icon: GraduationCap },
+  { name: "Settings", href: "/admin/settings", icon: Settings },
 ]
 
 const teacherNavigation = [
   { name: "Dashboard", href: "/teacher", icon: LayoutDashboard },
   { name: "My Classes", href: "/teacher/classes", icon: BookOpen },
-  { name: "Grading Components", href: "/teacher/grading-components", icon: Settings },
   { name: "Grade Submissions", href: "/teacher/submissions", icon: FileCheck },
 ]
 
@@ -120,7 +126,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               />
               {!sidebarCollapsed && (
                 <div>
-                  <h1 className="text-lg font-bold">GGS</h1>
+                  <h1 className="text-lg font-bold">GIT</h1>
                   <p className="text-xs text-muted-foreground">Grading System</p>
                 </div>
               )}

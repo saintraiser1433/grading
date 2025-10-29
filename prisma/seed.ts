@@ -178,7 +178,7 @@ async function main() {
         subjectId: subject.id,
         classId: classData.id,
         schoolYearId: schoolYear.id,
-        status: "ENROLLED",
+        status: "PENDING",
       },
     })
     enrollments.push(enrollment)

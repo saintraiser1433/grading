@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { BookOpen, GraduationCap, Calendar, TrendingUp, Award, Plus, Clock } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -40,9 +41,13 @@ export default async function StudentDashboard() {
   const currentEnrollments = enrollments.filter(
     (e) => e.schoolYearId === activeSchoolYear?.id
   )
+  
+  const approvedEnrollments = currentEnrollments.filter(
+    (e) => e.status === "APPROVED"
+  )
 
   // Calculate grade stats
-  const gradesWithScores = currentEnrollments.filter(
+  const gradesWithScores = approvedEnrollments.filter(
     (e) => e.grades.length > 0 && e.grades.some((g) => g.overallGrade !== null)
   )
   const passedSubjects = gradesWithScores.filter(
@@ -57,8 +62,8 @@ export default async function StudentDashboard() {
 
   const stats = [
     {
-      title: "Current Enrollments",
-      value: currentEnrollments.length.toString(),
+      title: "Approved Enrollments",
+      value: approvedEnrollments.length.toString(),
       change: "+15.3%",
       trend: "up",
       icon: BookOpen,
@@ -169,34 +174,36 @@ export default async function StudentDashboard() {
             </div>
             {currentEnrollments.length > 0 && (
               <Badge variant="secondary" className="text-xs">
-                {currentEnrollments.length} Enrolled
+                {approvedEnrollments.length} Approved • {currentEnrollments.length} Total
               </Badge>
             )}
           </div>
         </CardHeader>
         <CardContent>
           {currentEnrollments.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                <BookOpen className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-medium">No enrollments yet</h3>
-              <p className="text-sm text-muted-foreground mt-2 mb-4">
-                Enroll in subjects to start your academic journey
-              </p>
-              <Link href="/student/enroll">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Enroll Now
-                </Button>
-              </Link>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title="No Enrollments Yet"
+              description="You haven't enrolled in any subjects yet. Browse available subjects to start your academic journey."
+              action={
+                <Link href="/student/enroll">
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Enroll Now
+                  </Button>
+                </Link>
+              }
+            />
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {currentEnrollments.map((enrollment) => {
                 const grade = enrollment.grades.find((g) => g.overallGrade !== null)
-                const hasMidterm = enrollment.grades.some((g) => g.isMidterm && g.midtermGrade !== null)
-                const hasFinal = enrollment.grades.some((g) => !g.isMidterm && g.finalGrade !== null)
+                // Get all grade types dynamically
+                const gradeTypes = [...new Set(enrollment.grades.map(g => g.gradeType?.name).filter(Boolean))]
+                const hasGrades = gradeTypes.map(gradeTypeName => ({
+                  name: gradeTypeName,
+                  hasGrade: enrollment.grades.some((g) => g.gradeType?.name === gradeTypeName && g.grade !== null)
+                }))
                 
                 return (
                   <div
@@ -209,10 +216,18 @@ export default async function StudentDashboard() {
                           <BookOpen className="h-5 w-5 text-primary" />
                         </div>
                         <Badge 
-                          variant={enrollment.status === "ENROLLED" ? "default" : "secondary"}
-                          className="text-xs"
+                          variant="outline"
+                          className={`text-xs ${
+                            enrollment.status === "APPROVED" 
+                              ? "text-green-600 border-green-600" 
+                              : enrollment.status === "PENDING"
+                              ? "text-yellow-600 border-yellow-600"
+                              : "text-red-600 border-red-600"
+                          }`}
                         >
-                          {enrollment.status}
+                          {enrollment.status === "APPROVED" ? "Approved" : 
+                           enrollment.status === "PENDING" ? "Pending" : 
+                           "Rejected"}
                         </Badge>
                       </div>
                       
@@ -253,17 +268,17 @@ export default async function StudentDashboard() {
                             className="h-2"
                           />
                           <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Midterm: {hasMidterm ? "✓" : "—"}</span>
-                            <span>Final: {hasFinal ? "✓" : "—"}</span>
+                            {hasGrades.map((gradeInfo, index) => (
+                              <span key={index}>
+                                {gradeInfo.name}: {gradeInfo.hasGrade ? "✓" : "—"}
+                              </span>
+                            ))}
+                            {hasGrades.length === 0 && (
+                              <span>No grade types available</span>
+                            )}
                           </div>
                         </div>
-                      ) : (
-                        <div className="pt-3 border-t">
-                          <Badge variant="outline" className="w-full justify-center text-xs">
-                            Grades pending
-                          </Badge>
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )
@@ -275,4 +290,5 @@ export default async function StudentDashboard() {
     </div>
   )
 }
+
 

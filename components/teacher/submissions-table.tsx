@@ -3,22 +3,38 @@
 import { GradeSubmission, Class, Subject, SchoolYear, User } from "@prisma/client"
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table"
+import { AdminEmptyState } from "@/components/ui/admin-empty-state"
 import { format } from "date-fns"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
 
 type SubmissionWithDetails = GradeSubmission & {
   class: Class & { subject: Subject }
   schoolYear: SchoolYear
   approver: User | null
+  gradeType: { name: string } | null
 }
 
 interface SubmissionsTableProps {
@@ -26,6 +42,49 @@ interface SubmissionsTableProps {
 }
 
 export function TeacherSubmissionsTable({ submissions }: SubmissionsTableProps) {
+  const [deleteDialog, setDeleteDialog] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const router = useRouter()
+  const { toast } = useToast()
+
+  const handleDeleteSubmission = async (submissionId: string) => {
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/grades/delete-submission`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ submissionId }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast({
+          title: "✅ Submission Deleted",
+          description: "The grade submission has been successfully deleted.",
+        })
+        setDeleteDialog(null)
+        router.refresh()
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to delete submission",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Delete submission error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete submission",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
   const columns: ColumnDef<SubmissionWithDetails>[] = [
     {
       accessorKey: "subject",
@@ -51,15 +110,18 @@ export function TeacherSubmissionsTable({ submissions }: SubmissionsTableProps) 
       },
     },
     {
-      accessorKey: "isMidterm",
+      accessorKey: "gradeType",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Period" />
+        <DataTableColumnHeader column={column} title="Grade Type" />
       ),
-      cell: ({ row }) => (
-        <Badge variant="outline">
-          {row.getValue("isMidterm") ? "Midterm" : "Final"}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const gradeType = row.original.gradeType
+        return (
+          <Badge variant="outline">
+            {gradeType?.name || "Unknown"}
+          </Badge>
+        )
+      },
     },
     {
       accessorKey: "schoolYear",
@@ -129,6 +191,18 @@ export function TeacherSubmissionsTable({ submissions }: SubmissionsTableProps) 
                   View Approver
                 </DropdownMenuItem>
               )}
+              {submission.status === 'PENDING' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setDeleteDialog(submission.id)}
+                    className="text-red-600 focus:text-red-600"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Submission
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -138,19 +212,56 @@ export function TeacherSubmissionsTable({ submissions }: SubmissionsTableProps) 
 
   if (submissions.length === 0) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">No submissions yet</p>
-      </div>
+      <AdminEmptyState
+        iconName="FileCheck"
+        title="No Grade Submissions Yet"
+        description="You haven't submitted any grades for approval. Once you submit grades from your classes, they will appear here."
+      />
     )
   }
 
   return (
-    <DataTable
-      columns={columns}
-      data={submissions}
-      searchKey="subject"
-      searchPlaceholder="Search by subject or class..."
-    />
+    <>
+      <DataTable
+        columns={columns}
+        data={submissions}
+        searchKey="subject"
+        searchPlaceholder="Search by subject or class..."
+      />
+      
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog !== null} onOpenChange={() => setDeleteDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              Delete Grade Submission
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this grade submission? This action cannot be undone.
+              <br /><br />
+              <span className="text-sm text-gray-600">
+                • The submission will be permanently removed
+                <br />
+                • You can resubmit grades after making changes
+                <br />
+                • This only works for PENDING submissions
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteDialog && handleDeleteSubmission(deleteDialog)}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? "Deleting..." : "Delete Submission"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 

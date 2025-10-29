@@ -1,4 +1,4 @@
-# GIT Grading System (GGS)
+# GIT Grading System
 
 A modern, full-stack grading management system built with Next.js 16, TypeScript, Prisma, PostgreSQL, and ShadCN UI.
 

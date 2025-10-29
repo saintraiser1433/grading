@@ -68,7 +68,15 @@ export async function createTeacherSubjectAssignment(data: CreateAssignmentInput
       return { success: false, error: "A class with this subject, section, and school year already exists" }
     }
 
-    // Create the class assignment
+    // First, create the subject assignment
+    const subjectAssignment = await prisma.subjectAssignment.create({
+      data: {
+        subjectId: data.subjectId,
+        teacherId: data.teacherId
+      }
+    })
+
+    // Then create the class assignment
     const classAssignment = await prisma.class.create({
       data: {
         name: data.name || `${subject.name} - ${data.section}`,
@@ -202,6 +210,15 @@ export async function removeTeacherAssignment(classId: string) {
       return { success: false, error: "Cannot remove assignment with enrolled students" }
     }
 
+    // Remove the subject assignment first
+    await prisma.subjectAssignment.deleteMany({
+      where: {
+        subjectId: classWithEnrollments.subjectId,
+        teacherId: classWithEnrollments.teacherId
+      }
+    })
+
+    // Then remove the class
     await prisma.class.delete({
       where: { id: classId }
     })

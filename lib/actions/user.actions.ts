@@ -100,3 +100,23 @@ export async function getUserById(id: string) {
   }
 }
 
+export async function getTeachers() {
+  try {
+    const teachers = await prisma.user.findMany({
+      where: { role: "TEACHER" },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        employeeId: true,
+      },
+      orderBy: { firstName: "asc" },
+    })
+
+    return { success: true, data: teachers }
+  } catch (error) {
+    return { success: false, error: "Failed to fetch teachers" }
+  }
+}
+

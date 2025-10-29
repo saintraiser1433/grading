@@ -2,11 +2,13 @@ import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getSubjectsAssignedToTeacherManyToMany } from "@/lib/actions/subject.actions"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { BookOpen, Users, ClipboardList, FileCheck, TrendingUp, GraduationCap, Calendar, Plus } from "lucide-react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 export default async function TeacherDashboard() {
   const session = await getServerSession(authOptions)
@@ -17,14 +19,21 @@ export default async function TeacherDashboard() {
 
   // Fetch comprehensive statistics
   const [
+    activeSchoolYear,
     classes,
+    assignedSubjectsResult,
     totalStudents,
     pendingSubmissions,
     approvedSubmissions,
-    activeSchoolYear,
   ] = await Promise.all([
+    prisma.schoolYear.findFirst({
+      where: { isActive: true },
+    }),
     prisma.class.findMany({
-      where: { teacherId: session.user.id },
+      where: { 
+        teacherId: session.user.id,
+        schoolYear: { isActive: true }
+      },
       include: {
         subject: true,
         schoolYear: true,
@@ -36,6 +45,7 @@ export default async function TeacherDashboard() {
       },
       orderBy: { createdAt: "desc" },
     }),
+    getSubjectsAssignedToTeacherManyToMany(session.user.id),
     prisma.enrollment.count({
       where: {
         class: {
@@ -55,21 +65,11 @@ export default async function TeacherDashboard() {
         status: "APPROVED",
       },
     }),
-    0, // Removed grading criteria count as it's now admin-only
-    prisma.schoolYear.findFirst({ where: { isActive: true } }),
   ])
 
+  const assignedSubjects = assignedSubjectsResult.success ? assignedSubjectsResult.data : []
+
   const stats = [
-    {
-      title: "My Classes",
-      value: classes.length.toString(),
-      change: "+12.5%",
-      trend: "up",
-      icon: BookOpen,
-      description: "Active classes",
-      bgColor: "bg-blue-50",
-      iconColor: "text-blue-600",
-    },
     {
       title: "Total Students",
       value: totalStudents.toString(),
@@ -124,12 +124,6 @@ export default async function TeacherDashboard() {
               </div>
             </div>
           )}
-          <Link href="/teacher/classes/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Class
-            </Button>
-          </Link>
         </div>
       </div>
 
@@ -182,21 +176,17 @@ export default async function TeacherDashboard() {
         </CardHeader>
         <CardContent>
           {classes.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                <BookOpen className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-medium">No classes yet</h3>
-              <p className="text-sm text-muted-foreground mt-2 mb-4">
-                Create your first class to start managing student grades
-              </p>
-              <Link href="/teacher/classes/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Class
-                </Button>
-              </Link>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title="No Classes Assigned"
+              description="You don't have any classes assigned yet. Contact your administrator to get assigned to subjects and classes will be created automatically."
+              action={
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  <span>Waiting for class assignments...</span>
+                </div>
+              }
+            />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {classes.map((classItem) => (

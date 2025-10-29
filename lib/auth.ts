@@ -35,6 +35,11 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        // Check if student is approved
+        if (user.role === "STUDENT" && user.status !== "APPROVED") {
+          return null
+        }
+
         return {
           id: user.id,
           email: user.email,

@@ -25,8 +25,36 @@ export async function createEnrollment(data: CreateEnrollmentInput) {
       return { success: false, error: "Already enrolled in this subject" }
     }
 
+    // If no classId provided, find the appropriate class for this subject
+    let classId = validated.classId
+    if (!classId) {
+      const subject = await prisma.subject.findUnique({
+        where: { id: validated.subjectId },
+        include: { classes: true }
+      })
+
+      if (!subject) {
+        return { success: false, error: "Subject not found" }
+      }
+
+      // Find the first available class for this subject and school year
+      const availableClass = subject.classes.find(
+        (cls) => cls.schoolYearId === validated.schoolYearId
+      )
+
+      if (!availableClass) {
+        return { success: false, error: "No classes available for this subject" }
+      }
+
+      classId = availableClass.id
+    }
+
     const enrollment = await prisma.enrollment.create({
-      data: validated,
+      data: {
+        ...validated,
+        classId,
+        status: "PENDING",
+      },
       include: {
         subject: true,
         class: true,
@@ -35,6 +63,7 @@ export async function createEnrollment(data: CreateEnrollmentInput) {
     })
 
     revalidatePath("/student/enrollments")
+    revalidatePath("/teacher/classes")
     return { success: true, data: enrollment }
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -72,12 +101,48 @@ export async function getStudentEnrollments(studentId: string, schoolYearId?: st
           },
         },
         schoolYear: true,
-        grades: true,
+        grades: {
+          include: {
+            gradeType: {
+              select: {
+                name: true,
+                percentage: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { enrolledAt: "desc" },
     })
 
-    return { success: true, data: enrollments }
+    // Filter grades to only show those from approved submissions
+    const enrollmentsWithApprovedGrades = await Promise.all(
+      enrollments.map(async (enrollment) => {
+        const approvedGrades = []
+        
+        for (const grade of enrollment.grades) {
+          // Check if there's an approved submission for this class and grade type
+          const approvedSubmission = await prisma.gradeSubmission.findFirst({
+            where: {
+              classId: enrollment.classId,
+              gradeTypeId: grade.gradeTypeId,
+              status: "APPROVED"
+            }
+          })
+          
+          if (approvedSubmission) {
+            approvedGrades.push(grade)
+          }
+        }
+        
+        return {
+          ...enrollment,
+          grades: approvedGrades
+        }
+      })
+    )
+
+    return { success: true, data: enrollmentsWithApprovedGrades }
   } catch (error) {
     return { success: false, error: "Failed to fetch enrollments" }
   }

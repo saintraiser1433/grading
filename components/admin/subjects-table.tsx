@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Subject, SchoolYear } from "@prisma/client"
+import { Subject, SchoolYear, User } from "@prisma/client"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Edit, Trash2, MoreHorizontal } from "lucide-react"
@@ -33,14 +33,18 @@ import { Switch } from "@/components/ui/switch"
 interface SubjectsTableProps {
   subjects: (Subject & {
     schoolYear: SchoolYear | null
+    subjectAssignments: {
+      teacher: User
+    }[]
     _count: {
       classes: number
       enrollments: number
     }
   })[]
+  onEdit?: (subject: Subject) => void
 }
 
-export function SubjectsTable({ subjects }: SubjectsTableProps) {
+export function SubjectsTable({ subjects, onEdit }: SubjectsTableProps) {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
@@ -109,6 +113,27 @@ export function SubjectsTable({ subjects }: SubjectsTableProps) {
       ),
     },
     {
+      accessorKey: "assignedTeachers",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Assigned Teachers" />
+      ),
+      cell: ({ row }) => {
+        const assignments = row.original.subjectAssignments
+        return assignments.length > 0 ? (
+          <div className="space-y-1">
+            {assignments.map((assignment) => (
+              <div key={assignment.teacher.id} className="text-sm">
+                <div className="font-medium">{assignment.teacher.firstName} {assignment.teacher.lastName}</div>
+                <div className="text-gray-500">{assignment.teacher.email}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="text-gray-400 italic">Not assigned</span>
+        )
+      },
+    },
+    {
       accessorKey: "isOpen",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Status" />
@@ -160,7 +185,7 @@ export function SubjectsTable({ subjects }: SubjectsTableProps) {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => router.push(`/admin/subjects/${subject.id}/edit`)}
+                onClick={() => onEdit ? onEdit(subject) : router.push(`/admin/subjects/${subject.id}/edit`)}
               >
                 <Edit className="mr-2 h-4 w-4" />
                 Edit

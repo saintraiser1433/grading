@@ -10,15 +10,25 @@ export function AuthBrandSection() {
       <div className="relative z-10 flex flex-col justify-center px-12 py-16 text-white">
         <div className="mb-8">
           <div className="flex items-center mb-6">
-            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4">
-              <span className="text-slate-900 font-bold text-xl">C</span>
+            <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center mr-4">
+              <img 
+                src="/gitlogo.png" 
+                alt="GIT Logo" 
+                className="w-12 h-12 rounded-lg"
+                onError={(e) => {
+                  // Fallback to text if image fails to load
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling.style.display = 'block';
+                }}
+              />
+              <span className="text-slate-900 font-bold text-xl hidden">G</span>
             </div>
-            <h1 className="text-2xl font-bold">CMS Full Form</h1>
+            <h1 className="text-2xl font-bold">GIT Grading System</h1>
           </div>
-          <h2 className="text-2xl font-bold mb-6 leading-tight">Powerful Content Management System</h2>
+          <h2 className="text-2xl font-bold mb-6 leading-tight">Advanced Academic Management Platform</h2>
           <p className="text-xl text-slate-300 mb-8 leading-relaxed">
-            Streamline your content creation, manage multiple websites, and boost your productivity with our
-            comprehensive CMS platform.
+            Streamline academic processes, manage grades efficiently, and enhance student learning outcomes with our
+            comprehensive grading and academic management system.
           </p>
         </div>
 
@@ -34,8 +44,8 @@ export function AuthBrandSection() {
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-lg mb-2">Multi-site Management</h3>
-              <p className="text-slate-300">Manage multiple websites from a single dashboard with ease.</p>
+              <h3 className="font-semibold text-lg mb-2">Real-time Grade Management</h3>
+              <p className="text-slate-300">Track and manage student grades with instant updates and comprehensive reporting.</p>
             </div>
           </div>
 
@@ -50,8 +60,8 @@ export function AuthBrandSection() {
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-lg mb-2">Advanced Analytics</h3>
-              <p className="text-slate-300">Track performance with detailed analytics and insights.</p>
+              <h3 className="font-semibold text-lg mb-2">Student Progress Analytics</h3>
+              <p className="text-slate-300">Monitor student performance with detailed analytics and progress insights.</p>
             </div>
           </div>
 
@@ -66,27 +76,12 @@ export function AuthBrandSection() {
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-lg mb-2">Team Collaboration</h3>
-              <p className="text-slate-300">Work together seamlessly with role-based permissions.</p>
+              <h3 className="font-semibold text-lg mb-2">Role-based Access Control</h3>
+              <p className="text-slate-300">Secure access for students, teachers, and administrators with appropriate permissions.</p>
             </div>
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-slate-700">
-          <p className="text-slate-400 text-sm">
-            "CMS Full Form has transformed how we manage our content. The intuitive interface and powerful features make
-            it a joy to use."
-          </p>
-          <div className="flex items-center mt-4">
-            <div className="w-10 h-10 bg-slate-600 rounded-full flex items-center justify-center mr-3">
-              <span className="text-sm font-medium">JD</span>
-            </div>
-            <div>
-              <p className="font-medium">John Doe</p>
-              <p className="text-slate-400 text-sm">Content Manager, TechCorp</p>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Decorative elements */}

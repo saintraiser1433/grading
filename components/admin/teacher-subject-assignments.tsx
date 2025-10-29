@@ -76,6 +76,8 @@ interface Assignment extends Class {
 
 export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: TeacherSubjectAssignmentsProps) {
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [filteredAssignments, setFilteredAssignments] = useState<Assignment[]>([])
+  const [selectedTeacher, setSelectedTeacher] = useState<string>("")
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -101,6 +103,14 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
   useEffect(() => {
     loadAssignments()
   }, [])
+
+  useEffect(() => {
+    if (selectedTeacher && selectedTeacher !== "all") {
+      setFilteredAssignments(assignments.filter(assignment => assignment.teacherId === selectedTeacher))
+    } else {
+      setFilteredAssignments(assignments)
+    }
+  }, [selectedTeacher, assignments])
 
   const loadAssignments = async () => {
     setIsLoading(true)
@@ -237,8 +247,27 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
 
   return (
     <div className="space-y-6">
+      {/* Teacher Filter */}
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Current Assignments</h3>
+        <div className="flex items-center gap-4">
+          <h3 className="text-lg font-semibold">Current Assignments</h3>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="teacher-filter">Filter by Teacher:</Label>
+            <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="All teachers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All teachers</SelectItem>
+                {teachers.map((teacher) => (
+                  <SelectItem key={teacher.id} value={teacher.id}>
+                    {teacher.firstName} {teacher.lastName} ({teacher.email})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -404,13 +433,25 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
         </Dialog>
       </div>
 
-      {assignments.length === 0 ? (
+      {/* Summary */}
+      {selectedTeacher && selectedTeacher !== "all" && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+          <p className="text-sm text-blue-700 dark:text-blue-300">
+            Showing {filteredAssignments.length} assignment{filteredAssignments.length !== 1 ? 's' : ''} for{" "}
+            {teachers.find(t => t.id === selectedTeacher)?.firstName} {teachers.find(t => t.id === selectedTeacher)?.lastName}
+          </p>
+        </div>
+      )}
+
+      {filteredAssignments.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">No assignments found</p>
+          <p className="text-muted-foreground">
+            {selectedTeacher && selectedTeacher !== "all" ? "No assignments found for selected teacher" : "No assignments found"}
+          </p>
         </div>
       ) : (
         <div className="grid gap-4">
-          {assignments.map((assignment) => (
+          {filteredAssignments.map((assignment) => (
             <Card key={assignment.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">

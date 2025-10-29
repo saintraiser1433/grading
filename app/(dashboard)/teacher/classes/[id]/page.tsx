@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button"
 import { ClassStudents } from "@/components/teacher/class-students"
 import { EnhancedGradesSheet } from "@/components/teacher/enhanced-grades-sheet"
 
+// Force dynamic rendering to prevent caching issues
+export const dynamic = 'force-dynamic'
+
 export default async function ClassDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
 
@@ -31,8 +34,8 @@ export default async function ClassDetailPage({ params }: { params: { id: string
     redirect("/teacher/classes")
   }
 
-  // Fetch grading types and global criteria
-  const [gradeTypes, globalCriteria] = await Promise.all([
+  // Fetch grading types, global criteria, and submission statuses
+  const [gradeTypes, globalCriteria, submissions] = await Promise.all([
     prisma.gradeType.findMany({
       where: { isActive: true },
       orderBy: { order: "asc" },
@@ -51,7 +54,36 @@ export default async function ClassDetailPage({ params }: { params: { id: string
         { order: "asc" }
       ],
     }),
+    prisma.gradeSubmission.findMany({
+      where: {
+        classId: classData.id,
+        teacherId: session.user.id,
+        schoolYearId: classData.schoolYearId,
+      },
+      select: {
+        gradeTypeId: true,
+        status: true,
+        id: true,
+      },
+    }),
   ])
+
+  // Create a map of gradeTypeId to submission status
+  const submissionStatusMap = new Map()
+  submissions.forEach(submission => {
+    submissionStatusMap.set(submission.gradeTypeId, {
+      status: submission.status,
+      id: submission.id
+    })
+  })
+
+  // Debug logging
+  console.log("=== CLASS DETAIL PAGE DEBUG ===")
+  console.log("Class ID:", params.id)
+  console.log("Raw submissions from DB:", submissions)
+  console.log("Submission status map:", Array.from(submissionStatusMap.entries()))
+  console.log("Grade types:", gradeTypes.map(gt => ({ id: gt.id, name: gt.name })))
+  console.log("=== END DEBUG ===")
 
   return (
     <div className="space-y-6">
@@ -101,17 +133,26 @@ export default async function ClassDetailPage({ params }: { params: { id: string
         {gradeTypes.map((gradeType) => {
           // Convert new schema to old schema format for compatibility
           const isMidterm = gradeType.name.toLowerCase() === 'midterm'
+          
+          // Use global criteria filtered by grade type
           const typeCriteria = globalCriteria.filter(c => c.gradeTypeId === gradeType.id)
           
           // Convert GlobalGradingCriteria to old GradingCriteria format
-          const oldFormatCriteria = typeCriteria.map(criteria => ({
+          const formattedCriteria = typeCriteria.map(criteria => ({
             id: criteria.id,
             name: criteria.name,
             percentage: criteria.percentage,
             classId: classData.id,
+            isMidterm: isMidterm,
+            order: criteria.order,
             createdAt: criteria.createdAt,
             updatedAt: criteria.updatedAt
           }))
+
+          // Get submission status for this grade type
+          const submissionInfo = submissionStatusMap.get(gradeType.id)
+          const submissionStatus = submissionInfo?.status || null
+          const submissionId = submissionInfo?.id || undefined
 
           return (
             <TabsContent key={gradeType.id} value={gradeType.id}>
@@ -119,10 +160,14 @@ export default async function ClassDetailPage({ params }: { params: { id: string
                 classId={classData.id}
                 isMidterm={isMidterm}
                 enrollments={classData.enrollments}
-                criteria={oldFormatCriteria}
+                criteria={formattedCriteria}
                 classData={classData}
                 gradeType={gradeType}
                 allGradeTypes={gradeTypes}
+                submissionStatus={submissionStatus}
+                submissionId={submissionId}
+                allSubmissionStatuses={submissionStatusMap}
+                showApprovalButtons={false}
               />
             </TabsContent>
           )

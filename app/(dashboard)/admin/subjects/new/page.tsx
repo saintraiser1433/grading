@@ -15,7 +15,7 @@ export default async function NewSubjectPage() {
   }
 
   const schoolYearsResult = await getSchoolYears()
-  const schoolYears = schoolYearsResult.success ? schoolYearsResult.data : []
+  const schoolYears = schoolYearsResult.success ? schoolYearsResult.data || [] : []
 
   return (
     <div className="space-y-6">

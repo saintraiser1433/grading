@@ -14,8 +14,19 @@ export async function createClass(data: CreateClassInput) {
   try {
     const validated = CreateClassSchema.parse(data)
 
-    const classData = await prisma.class.create({
-      data: validated,
+    // If no schoolYearId is provided, use the active school year
+    let classData = validated
+    if (!classData.schoolYearId) {
+      const activeSchoolYear = await prisma.schoolYear.findFirst({
+        where: { isActive: true },
+      })
+      if (activeSchoolYear) {
+        classData = { ...classData, schoolYearId: activeSchoolYear.id }
+      }
+    }
+
+    const result = await prisma.class.create({
+      data: classData,
       include: {
         subject: true,
         teacher: true,
@@ -24,7 +35,7 @@ export async function createClass(data: CreateClassInput) {
     })
 
     revalidatePath("/teacher/classes")
-    return { success: true, data: classData }
+    return { success: true, data: result }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message }
@@ -73,8 +84,22 @@ export async function deleteClass(id: string) {
 
 export async function getClasses(teacherId?: string) {
   try {
+    // Get the active school year first
+    const activeSchoolYear = await prisma.schoolYear.findFirst({
+      where: { isActive: true },
+    })
+
+    if (!activeSchoolYear) {
+      return { success: true, data: [] }
+    }
+
     const classes = await prisma.class.findMany({
-      where: teacherId ? { teacherId } : undefined,
+      where: teacherId 
+        ? { 
+            teacherId,
+            schoolYearId: activeSchoolYear.id
+          } 
+        : { schoolYearId: activeSchoolYear.id },
       include: {
         subject: true,
         teacher: true,
@@ -157,6 +182,41 @@ export async function removeStudentFromClass(enrollmentId: string) {
     return { success: true }
   } catch (error) {
     return { success: false, error: "Failed to remove student from class" }
+  }
+}
+
+export async function approveEnrollment(enrollmentId: string) {
+  try {
+    const enrollment = await prisma.enrollment.update({
+      where: { id: enrollmentId },
+      data: {
+        status: "APPROVED",
+        approvedAt: new Date(),
+      },
+    })
+
+    revalidatePath("/teacher/classes")
+    return { success: true, data: enrollment }
+  } catch (error) {
+    return { success: false, error: "Failed to approve enrollment" }
+  }
+}
+
+export async function rejectEnrollment(enrollmentId: string, reason: string) {
+  try {
+    const enrollment = await prisma.enrollment.update({
+      where: { id: enrollmentId },
+      data: {
+        status: "REJECTED",
+        rejectedAt: new Date(),
+        rejectionReason: reason,
+      },
+    })
+
+    revalidatePath("/teacher/classes")
+    return { success: true, data: enrollment }
+  } catch (error) {
+    return { success: false, error: "Failed to reject enrollment" }
   }
 }
 
