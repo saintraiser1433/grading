@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { Enrollment, GradingCriteria, User, Subject, Class, SchoolYear } from "@prisma/client"
@@ -193,6 +193,21 @@ export function EnhancedGradesSheet({
   vpAcademicsGlobal,
   departmentHeadGlobal
 }: GradesSheetProps) {
+  // Sort enrollments by last name in ascending order
+  const sortedEnrollments = useMemo(() => {
+    return [...enrollments].sort((a, b) => {
+      const lastNameA = (a.student.lastName || '').toLowerCase().trim()
+      const lastNameB = (b.student.lastName || '').toLowerCase().trim()
+      if (lastNameA < lastNameB) return -1
+      if (lastNameA > lastNameB) return 1
+      // If last names are equal, sort by first name
+      const firstNameA = (a.student.firstName || '').toLowerCase().trim()
+      const firstNameB = (b.student.firstName || '').toLowerCase().trim()
+      if (firstNameA < firstNameB) return -1
+      if (firstNameA > firstNameB) return 1
+      return 0
+    })
+  }, [enrollments])
   const [components, setComponents] = useState<Map<string, Component[]>>(new Map())
   const [studentScores, setStudentScores] = useState<Map<string, Map<string, number>>>(new Map())
   const [existingGrades, setExistingGrades] = useState<Map<string, any>>(new Map())
@@ -241,22 +256,22 @@ export function EnhancedGradesSheet({
   // Final read-only state: either explicitly set as read-only OR submission is pending/approved
   const finalIsReadOnly: boolean = isReadOnly || isSubmissionDisabled
   
-  // Debug logging
-  console.log("=== GRADING SHEET STATUS DEBUG ===")
-  console.log("Grade type name:", gradeType?.name)
-  console.log("Grade type ID:", gradeType?.id)
-  console.log("Is final grade type:", isFinalGradeType)
-  console.log("Passed submission status:", submissionStatus)
-  console.log("Current grade type status from map:", currentGradeTypeStatus)
-  console.log("Effective submission status:", effectiveSubmissionStatus)
-  console.log("Submission ID:", submissionId)
-  console.log("Is submission disabled:", isSubmissionDisabled)
-  console.log("Is submission editable:", isSubmissionEditable)
-  console.log("Final is read-only:", finalIsReadOnly)
-  console.log("Should show only Export:", isSubmissionDisabled)
-  console.log("Should show all buttons:", !finalIsReadOnly && !isSubmissionDisabled)
-  console.log("All submission statuses:", Array.from(allSubmissionStatuses.entries()))
-  console.log("=== END DEBUG ===")
+  // Debug logging - disabled for performance (uncomment for debugging)
+  // console.log("=== GRADING SHEET STATUS DEBUG ===")
+  // console.log("Grade type name:", gradeType?.name)
+  // console.log("Grade type ID:", gradeType?.id)
+  // console.log("Is final grade type:", isFinalGradeType)
+  // console.log("Passed submission status:", submissionStatus)
+  // console.log("Current grade type status from map:", currentGradeTypeStatus)
+  // console.log("Effective submission status:", effectiveSubmissionStatus)
+  // console.log("Submission ID:", submissionId)
+  // console.log("Is submission disabled:", isSubmissionDisabled)
+  // console.log("Is submission editable:", isSubmissionEditable)
+  // console.log("Final is read-only:", finalIsReadOnly)
+  // console.log("Should show only Export:", isSubmissionDisabled)
+  // console.log("Should show all buttons:", !finalIsReadOnly && !isSubmissionDisabled)
+  // console.log("All submission statuses:", Array.from(allSubmissionStatuses.entries()))
+  // console.log("=== END DEBUG ===")
 
   // Load existing grades from database
   const loadExistingGrades = async () => {
@@ -264,25 +279,68 @@ export function EnhancedGradesSheet({
     
     try {
       setIsLoadingGrades(true)
-      console.log("Loading existing grades for gradeType:", gradeType.id)
-      
       const response = await fetch(`/api/grades/load?classId=${classId}&gradeTypeId=${gradeType.id}`)
       const result = await response.json()
       
       if (result.success) {
-        console.log("Loaded existing grades:", result.grades)
         const gradesMap = new Map(Object.entries(result.grades))
         setExistingGrades(gradesMap)
         
         // Load status for each student from the grades
+        // If a student is DROPPED in any grade type, show as DROPPED
         const statusMap = new Map<string, 'NORMAL' | 'INC' | 'DROPPED'>()
-        Object.entries(result.grades).forEach(([studentId, gradeData]: [string, any]) => {
-          if (gradeData && gradeData.status) {
-            statusMap.set(studentId, gradeData.status)
+        
+        // First, check all grade types to see if any student is DROPPED
+        const checkAllStatuses = async () => {
+          try {
+            const allStatuses = new Map<string, 'NORMAL' | 'INC' | 'DROPPED'>()
+            
+            // Check all grade types for DROPPED status
+            for (const gt of allGradeTypes) {
+              const response = await fetch(`/api/grades/load?classId=${classId}&gradeTypeId=${gt.id}`)
+              const result = await response.json()
+              
+              if (result.success) {
+                Object.entries(result.grades).forEach(([studentId, gradeData]: [string, any]) => {
+                  if (gradeData && gradeData.status) {
+                    const existingStatus = allStatuses.get(studentId)
+                    // If student is DROPPED in any grade type, set as DROPPED
+                    if (gradeData.status === 'DROPPED' || existingStatus === 'DROPPED') {
+                      allStatuses.set(studentId, 'DROPPED')
+                    } else if (!existingStatus) {
+                      allStatuses.set(studentId, gradeData.status)
+                    }
+                  }
+                })
+              }
+            }
+            
+            // Merge with current grade type statuses, prioritizing DROPPED
+            Object.entries(result.grades).forEach(([studentId, gradeData]: [string, any]) => {
+              if (gradeData && gradeData.status) {
+                const globalStatus = allStatuses.get(studentId)
+                if (globalStatus === 'DROPPED') {
+                  statusMap.set(studentId, 'DROPPED')
+                } else {
+                  statusMap.set(studentId, gradeData.status)
+                }
+              }
+            })
+            
+            setStudentStatus(statusMap)
+          } catch (error) {
+            console.error("Error checking all statuses:", error)
+            // Fallback to just current grade type
+            Object.entries(result.grades).forEach(([studentId, gradeData]: [string, any]) => {
+              if (gradeData && gradeData.status) {
+                statusMap.set(studentId, gradeData.status)
+              }
+            })
+            setStudentStatus(statusMap)
           }
-        })
-        setStudentStatus(statusMap)
-        console.log("Loaded student statuses:", statusMap)
+        }
+        
+        checkAllStatuses()
       } else {
         console.error("Failed to load grades:", result.error)
       }
@@ -295,32 +353,23 @@ export function EnhancedGradesSheet({
 
   // Load component scores from database
   const loadComponentScores = async () => {
-    if (!gradeType) {
-      console.log("❌ No gradeType available for loading component scores")
-      return
-    }
-    
-    try {
-      setIsLoadingComponents(true)
-      console.log("🔄 Loading component scores for gradeType:", gradeType.id, "classId:", classId)
+      if (!gradeType) {
+        return
+      }
       
-      const response = await fetch(`/api/grades/load-component-scores?classId=${classId}&gradeTypeId=${gradeType.id}`)
-      const result = await response.json()
-      console.log("📡 API Response:", result)
-      
+      try {
+        setIsLoadingComponents(true)
+        
+        const response = await fetch(`/api/grades/load-component-scores?classId=${classId}&gradeTypeId=${gradeType.id}`)
+        const result = await response.json()
+        
         if (result.success) {
-          console.log("✅ API returned success, processing scores...")
-          console.log("📊 Raw scores from API:", result.scores)
-          
           const scoresMap = new Map()
           Object.entries(result.scores).forEach(([studentId, scores]) => {
-            console.log(`📊 Processing scores for student ${studentId}:`, scores)
             scoresMap.set(studentId, new Map(Object.entries(scores as Record<string, unknown>)))
           })
           
-          console.log("📊 Final scoresMap:", scoresMap)
           setComponentScores(scoresMap)
-          console.log("✅ Component scores loaded successfully!")
           
           // Also update local studentScores state so UI can display them
           setStudentScores(prev => {
@@ -332,7 +381,6 @@ export function EnhancedGradesSheet({
               })
               newScores.set(studentId, studentMap)
             })
-            console.log("📊 Updated studentScores:", newScores)
             return newScores
           })
         } else {
@@ -350,7 +398,6 @@ export function EnhancedGradesSheet({
     if (!allGradeTypes.length) return
     
     try {
-      console.log("Loading all grades for all grade types")
       const allGrades = new Map()
       
       // Load grades for each grade type
@@ -359,7 +406,6 @@ export function EnhancedGradesSheet({
         const result = await response.json()
         
         if (result.success) {
-          console.log(`Loaded grades for ${gradeTypeItem.name}:`, result.grades)
           Object.entries(result.grades).forEach(([studentId, grade]) => {
             const key = `${studentId}-${gradeTypeItem.id}`
             allGrades.set(key, grade)
@@ -368,7 +414,6 @@ export function EnhancedGradesSheet({
       }
       
       setAllExistingGrades(allGrades)
-      console.log("All grades loaded:", allGrades.size)
     } catch (error) {
       console.error("Error loading all grades:", error)
     }
@@ -376,7 +421,6 @@ export function EnhancedGradesSheet({
 
   // Load existing grades and component scores when component mounts or gradeType changes
   useEffect(() => {
-    console.log("🔄 Loading data for gradeType:", gradeType?.id, "classId:", classId)
     if (gradeType?.id && classId) {
       loadExistingGrades()
       loadComponentScores()
@@ -390,13 +434,10 @@ export function EnhancedGradesSheet({
     if (!classId || !gradeType?.id) return
     
     try {
-      console.log("Loading global components for gradeTypeId:", gradeType.id)
-      
       const response = await fetch(`/api/grades/global-components?gradeTypeId=${gradeType.id}`)
       const result = await response.json()
       
       if (result.success) {
-        console.log("Loaded global components:", result.components)
         
         // Group components by criteria
         const componentsByCriteria = new Map<string, Component[]>()
@@ -426,7 +467,7 @@ export function EnhancedGradesSheet({
   // Initialize with class components - removed duplicate call
   // loadClassComponents is already called in the main useEffect
 
-  const handleScoreChange = (studentId: string, componentId: string, value: string) => {
+  const handleScoreChange = useCallback((studentId: string, componentId: string, value: string) => {
     // Prevent changes when sheet is disabled
     if (finalIsReadOnly) {
       return
@@ -458,7 +499,7 @@ export function EnhancedGradesSheet({
     
     // Check if score exceeds maximum
     if (numericScore > maxScore) {
-      const student = enrollments.find(e => e.student.id === studentId)?.student
+      const student = sortedEnrollments.find(e => e.student.id === studentId)?.student
       const studentName = student ? `${student.firstName} ${student.lastName}` : 'Student'
       toast({
         title: "Invalid Score",
@@ -476,60 +517,83 @@ export function EnhancedGradesSheet({
       newScores.set(studentId, studentMap)
       return newScores
     })
-  }
+  }, [enrollments, components, toast, finalIsReadOnly])
 
-  const handleStatusChange = (studentId: string, status: 'NORMAL' | 'INC' | 'DROPPED') => {
+  const handleStatusChange = useCallback(async (studentId: string, status: 'NORMAL' | 'INC' | 'DROPPED') => {
     if (finalIsReadOnly) {
       return
     }
     
+    // Update local state immediately for UI responsiveness
     setStudentStatus(prev => {
       const newStatus = new Map(prev)
       newStatus.set(studentId, status)
       return newStatus
     })
-  }
 
-  const getStudentScore = (studentId: string, componentId: string): number | null => {
-    console.log(`🔍 getStudentScore called for student ${studentId}, component ${componentId}`)
-    
+    // If status is DROPPED, propagate to all grade types immediately
+    if (status === 'DROPPED') {
+      try {
+        const enrollment = sortedEnrollments.find(e => e.student.id === studentId)
+        if (enrollment) {
+          const response = await fetch('/api/grades/update-status-all', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              studentId,
+              enrollmentId: enrollment.id,
+              status: 'DROPPED',
+              classId
+            })
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success) {
+              toast({
+                title: "Status Updated",
+                description: `Student marked as DROPPED across all grade types`,
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error propagating DROPPED status:", error)
+        toast({
+          title: "Warning",
+          description: "Status updated locally but failed to propagate to all grade types",
+          variant: "destructive",
+        })
+      }
+    }
+  }, [finalIsReadOnly, sortedEnrollments, classId, toast])
+
+  const getStudentScore = useCallback((studentId: string, componentId: string): number | null => {
     // First check if we have local changes (user is editing)
     const localScore = studentScores.get(studentId)?.get(componentId)
     if (localScore !== undefined) {
-      console.log("✅ Using local score for student:", studentId, "component:", componentId, "score:", localScore)
       return localScore
     }
     
     // Fallback to loaded scores from database
     const studentComponentScores = componentScores.get(studentId)
-    console.log("📊 Student component scores:", studentComponentScores)
     
     if (studentComponentScores) {
       const loadedScore = studentComponentScores.get(componentId)
-      console.log("📊 Loaded score for component:", componentId, ":", loadedScore)
       
       if (loadedScore) {
-        console.log("✅ Using loaded score for student:", studentId, "component:", componentId, "score:", loadedScore.score)
         return loadedScore.score || null
       }
     }
     
-    // Debug: Check what's in componentScores
-    console.log("❌ No score found for student:", studentId, "component:", componentId)
-    console.log("📊 Component scores map size:", componentScores.size)
-    console.log("📊 Student scores map size:", studentScores.size)
-    console.log("📊 Available student IDs in componentScores:", Array.from(componentScores.keys()))
-    console.log("📊 Available student IDs in studentScores:", Array.from(studentScores.keys()))
-    
     // Return 0 instead of null to prevent 5.0 default
-    console.log("⚠️ Returning 0 instead of null to prevent 5.0 default")
     return 0
-  }
+  }, [studentScores, componentScores])
 
-  const calculateCategoryGrade = (studentId: string, criteriaId: string) => {
-    console.log(`🧮 calculateCategoryGrade for student ${studentId}, criteria ${criteriaId}`)
+  const calculateCategoryGrade = useCallback((studentId: string, criteriaId: string) => {
     const comps = components.get(criteriaId) || []
-    console.log(`📋 Components for criteria ${criteriaId}:`, comps)
     
     let totalScore = 0
     let maxScore = 0
@@ -540,12 +604,8 @@ export function EnhancedGradesSheet({
       if (score !== null && score > 0) {
         totalScore += score
         hasAnyScore = true
-        console.log(`✅ Found score for ${comp.name}: ${score}`)
-      } else {
-        console.log(`❌ No score found for ${comp.name} (score: ${score})`)
       }
       maxScore += comp.maxScore
-      console.log(`Category ${criteriaId}, Component ${comp.id}: score=${score}, maxScore=${comp.maxScore}`)
     })
 
     // Calculate percentage for display purposes only
@@ -563,80 +623,43 @@ export function EnhancedGradesSheet({
     
     const we = ge * ((criterion?.percentage || 0) / 100)
 
-    console.log(`📊 Category ${criteriaId} calculation: totalScore=${totalScore}, maxScore=${maxScore}, percentage=${percentage}, hasAnyScore=${hasAnyScore}, ge=${ge}, we=${we}`)
     return { totalScore, maxScore, percentage, ge, we }
-  }
+  }, [components, criteria, getStudentScore])
 
-  const calculateFinalGrade = (studentId: string): number => {
-    console.log("🧮 Calculating final grade for student:", studentId)
-    console.log("📊 Component scores available:", componentScores.size)
-    console.log("📊 Student scores available:", studentScores.size)
-    console.log("📊 Criteria available:", criteria.length)
-    
+  const calculateFinalGrade = useCallback((studentId: string): number => {
     // Always calculate from current scores to reflect real-time changes
     let totalWE = 0
     criteria.forEach(criterion => {
       const { we } = calculateCategoryGrade(studentId, criterion.id)
       totalWE += we
-      console.log(`📊 ${criterion.name}: WE = ${we}, totalWE so far = ${totalWE}`)
     })
 
     // The totalWE is already the final grade (1.0-5.0 scale)
     // No need to round or convert - totalWE is already in the correct scale
     const calculatedGrade = totalWE
     
-    // Debug: Check if this is the issue
-    if (calculatedGrade === 0) {
-      console.log("❌ ERROR: calculatedGrade is 0! This means no scores were found.")
-      console.log("❌ This will cause the grade to show as 5.0 (failed)")
-      console.log("❌ Check if component scores are being loaded properly")
-    }
-    
-    console.log("🎯 FINAL RESULT - Student:", studentId, "totalWE:", totalWE, "calculatedGrade:", calculatedGrade)
-    console.log("🎯 This should be the grade displayed in the UI")
-    
-    // Force a test value to see if the display is working
-    if (calculatedGrade === 0) {
-      console.log("🔧 FORCING TEST VALUE: 1.2")
-      return 1.2
-    }
-    
-    return calculatedGrade
-  }
+    return calculatedGrade || 5.0 // Return 5.0 if no grade calculated
+  }, [criteria, calculateCategoryGrade])
 
   // Calculate weighted final grade across all grade types
-  const calculateWeightedFinalGrade = (studentId: string): number => {
+  const calculateWeightedFinalGrade = useCallback((studentId: string): number => {
     if (!gradeType || !allGradeTypes.length) return 0
     
     // Use the same grade that's displayed in the UI (Final Term Grade)
     const currentGrade = calculateFinalGrade(studentId)
     
-    console.log(`Weighted contribution calculation for ${gradeType.name}:`)
-    console.log(`- Student ID: ${studentId}`)
-    console.log(`- Final Term Grade (currentGrade): ${currentGrade}`)
-    console.log(`- Grade type percentage: ${gradeType.percentage}%`)
-    
     // Calculate weighted contribution: Final Term Grade × (percentage / 100)
     const weightedContribution = currentGrade * (gradeType.percentage / 100)
     
-    console.log(`- Weighted contribution: ${currentGrade} × ${gradeType.percentage}% = ${weightedContribution}`)
-    
-    // No rounding needed for weighted contributions - return exact value
-    console.log(`- Final weighted contribution: ${weightedContribution}`)
-    
     return weightedContribution
-  }
+  }, [gradeType, allGradeTypes, calculateFinalGrade])
 
 
   // Calculate overall final grade across all grade types
-  const calculateOverallFinalGrade = (studentId: string): number => {
+  const calculateOverallFinalGrade = useCallback((studentId: string): number => {
     if (!allGradeTypes.length) return 0
     
     let totalWeightedGrade = 0
-    
-    console.log(`Calculating overall final grade for student ${studentId}`)
-    console.log(`All grade types:`, allGradeTypes.map(gt => ({ name: gt.name, id: gt.id, percentage: gt.percentage })))
-    console.log(`All existing grades:`, Array.from(allExistingGrades.entries()))
     
     // Calculate weighted grade for each grade type
     allGradeTypes.forEach(gradeTypeItem => {
@@ -646,24 +669,19 @@ export function EnhancedGradesSheet({
         const currentGrade = calculateFinalGrade(studentId)
         const weightedContribution = currentGrade * (gradeTypeItem.percentage / 100)
         totalWeightedGrade += weightedContribution
-        console.log(`Current grade type ${gradeTypeItem.name}: calculated grade=${currentGrade}, percentage=${gradeTypeItem.percentage}, weighted=${weightedContribution}`)
       } else {
         // For other grade types, use existing grades from database
         const key = `${studentId}-${gradeTypeItem.id}`
         const existingGrade = allExistingGrades.get(key)
         
-        console.log(`Other grade type ${gradeTypeItem.name} (${gradeTypeItem.id}): key=${key}, existingGrade=`, existingGrade)
-        
         if (existingGrade && existingGrade.grade) {
           // Use the weighted equivalent (WE) that's already calculated
           const weightedContribution = existingGrade.grade * (gradeTypeItem.percentage / 100)
           totalWeightedGrade += weightedContribution
-          console.log(`Grade type ${gradeTypeItem.name}: grade=${existingGrade.grade}, percentage=${gradeTypeItem.percentage}, weighted=${weightedContribution}`)
         } else {
           // No grade found, add 5.0 (failed) weighted contribution
           const weightedContribution = 5.0 * (gradeTypeItem.percentage / 100)
           totalWeightedGrade += weightedContribution
-          console.log(`Grade type ${gradeTypeItem.name}: no grade, using 5.0, percentage=${gradeTypeItem.percentage}, weighted=${weightedContribution}`)
         }
       }
     })
@@ -671,19 +689,8 @@ export function EnhancedGradesSheet({
     // Round to nearest 0.25 increment (1.0, 1.25, 1.50, 1.75, 2.0, etc.)
     const roundedGrade = Math.round(totalWeightedGrade * 4) / 4
     
-    console.log(`=== OVERALL FINAL GRADE CALCULATION ===`)
-    console.log(`Student ID: ${studentId}`)
-    console.log(`Total weighted grade: ${totalWeightedGrade}`)
-    console.log(`Rounding calculation: ${totalWeightedGrade} × 4 = ${totalWeightedGrade * 4}`)
-    console.log(`Math.round(${totalWeightedGrade * 4}) = ${Math.round(totalWeightedGrade * 4)}`)
-    console.log(`${Math.round(totalWeightedGrade * 4)} ÷ 4 = ${roundedGrade}`)
-    console.log(`Final result: ${roundedGrade}`)
-    console.log(`=== END CALCULATION ===`)
-    console.log(`Expected result: 1.0`)
-    console.log(`Match: ${roundedGrade === 1.0 ? 'YES' : 'NO'}`)
-    
     return roundedGrade
-  }
+  }, [allGradeTypes, gradeType, allExistingGrades, calculateFinalGrade])
 
   const handleAddComponent = async (criteriaId: string) => {
     if (!newComponent.name || newComponent.maxScore <= 0) {
@@ -809,7 +816,7 @@ export function EnhancedGradesSheet({
         'Remarks'
       ]
 
-      const rows = enrollments.map((enrollment, index) => {
+      const rows = sortedEnrollments.map((enrollment, index) => {
         const student = enrollment.student
         const currentGrade = calculateFinalGrade(student.id)
         const overallFinalGrade = calculateOverallFinalGrade(student.id)
@@ -1052,22 +1059,87 @@ export function EnhancedGradesSheet({
         description: "Please wait while we generate your PDF...",
       })
 
-      // Create a dedicated PDF container with proper styling for portrait
+      // Calculate total columns to determine layout
+      let totalColumns = 4 // #, First Name, Last Name, M.I.
+      const componentCounts: number[] = []
+      
+      criteria.forEach(criterion => {
+        const comps = components.get(criterion.id) || []
+        const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
+        const colsPerCriterion = visibleComps.length + (visibleComps.length > 0 ? 3 : 0) // components + TOT + GE + WE
+        componentCounts.push(colsPerCriterion)
+        totalColumns += colsPerCriterion
+      })
+      totalColumns += 2 // Grade + Remarks
+      
+      // Determine optimal layout based on column count
+      const useLandscape = totalColumns > 25 // Switch to landscape if more than 25 columns
+      const baseFontSize = useLandscape ? 7 : 8
+      const componentFontSize = useLandscape ? 6 : 7
+      const headerFontSize = useLandscape ? 7 : 8
+      const containerWidth = useLandscape ? '1200px' : '800px'
+      
+      // Abbreviate component names if there are many columns
+      const abbreviateNames = totalColumns > 30
+      
+      // Helper function to abbreviate component names
+      const abbreviateName = (name: string): string => {
+        if (!abbreviateNames) return name
+        // Common abbreviations
+        const abbrevMap: Record<string, string> = {
+          'Quiz': 'Q',
+          'QUIZ': 'Q',
+          'Attendance': 'Att',
+          'ATTENDANCE': 'Att',
+          'Activity': 'Act',
+          'ACTIVITY': 'Act',
+          'Class Participation': 'CP',
+          'CLASS PARTICIPATION': 'CP',
+          'Lecture Exam': 'LE',
+          'LECTURE EXAM': 'LE',
+          'Final Exam': 'FE',
+          'FINAL EXAM': 'FE',
+          'Assignment': 'Asg',
+          'ASSIGNMENT': 'Asg',
+        }
+        
+        let abbrev = name
+        for (const [full, short] of Object.entries(abbrevMap)) {
+          if (name.includes(full)) {
+            abbrev = name.replace(full, short).replace(/  +/g, ' ').trim()
+            break
+          }
+        }
+        
+        // If still long, take first 3-4 chars
+        if (abbrev.length > 8) {
+          const parts = abbrev.split(/\s+/)
+          if (parts.length > 1) {
+            abbrev = parts.map(p => p.substring(0, 3)).join('')
+          } else {
+            abbrev = abbrev.substring(0, 6)
+          }
+        }
+        
+        return abbrev
+      }
+
+      // Create a dedicated PDF container with dynamic styling
       const pdfContainer = document.createElement('div')
       pdfContainer.style.position = 'absolute'
       pdfContainer.style.left = '-9999px'
       pdfContainer.style.top = '-9999px'
-      pdfContainer.style.width = '800px' // Portrait width
+      pdfContainer.style.width = containerWidth
       pdfContainer.style.backgroundColor = 'white'
-      pdfContainer.style.padding = '15px'
+      pdfContainer.style.padding = '15px 5px'
       pdfContainer.style.fontFamily = 'Arial, sans-serif'
-      pdfContainer.style.fontSize = '10px'
+      pdfContainer.style.fontSize = `${baseFontSize}px`
       pdfContainer.style.lineHeight = '1.1'
       pdfContainer.style.color = '#000000'
       
       // Build the PDF content structure
       let pdfContent = `
-        <div style="width: 100%; background: white; font-family: Arial, sans-serif;">
+        <div style="width: 100%; background: white; font-family: Arial, sans-serif; padding: 0 5px;">
           <!-- Header Section with Logo -->
           <div style="display: flex; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 10px;">
             <div style="flex: 0 0 auto; margin-right: 15px;">
@@ -1114,74 +1186,90 @@ export function EnhancedGradesSheet({
           </div>
 
           <!-- Grades Table -->
-          <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 8px; border: 0.25px solid #333;">
+          <div style="overflow: visible; width: 100%;">
+            <table style="width: 100%; border-collapse: collapse; font-size: ${baseFontSize}px; border: 0.25px solid #333; table-layout: ${useLandscape ? 'auto' : 'fixed'}; min-width: fit-content; vertical-align: middle;">
+              <style>
+                table, table td, table th { 
+                  vertical-align: middle !important; 
+                }
+                table td, table th { 
+                  display: table-cell !important;
+                  text-align: center !important;
+                }
+              </style>
       `
 
-      // Add table headers
+      // Add table headers with dynamic sizing
+      // Increase padding to prevent border overlap with text
+      const headerPadding = useLandscape ? '4px' : '6px'
+      const cellPadding = useLandscape ? '3px' : '4px'
+      
       pdfContent += `
         <thead>
           <tr style="background: #333; color: white;">
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">#</th>
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">First Name</th>
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">Last Name</th>
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">M.I.</th>
+            <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '15px' : '20px'}; width: ${useLandscape ? '15px' : '20px'};">#</th>
+            <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '40px' : '60px'}; width: ${useLandscape ? '40px' : '60px'}; word-wrap: break-word;">First Name</th>
+            <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '50px' : '70px'}; width: ${useLandscape ? '50px' : '70px'}; word-wrap: break-word;">Last Name</th>
+            <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '15px' : '20px'}; width: ${useLandscape ? '15px' : '20px'};">M.I.</th>
       `
 
-      // Add criteria headers
+      // Add criteria headers with dynamic sizing
       criteria.forEach(criterion => {
         const comps = components.get(criterion.id) || []
         const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
+        const colspan = visibleComps.length + (visibleComps.length > 0 ? 3 : 0)
         pdfContent += `
-          <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;" colspan="${visibleComps.length + (visibleComps.length > 0 ? 3 : 0)}">
-            ${criterion.name} (${criterion.percentage}%)
+          <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; word-wrap: break-word;" colspan="${colspan}">
+            ${abbreviateNames ? criterion.name.replace(/Class Participation/gi, 'CP').replace(/Major Exam/gi, 'MajEx') : criterion.name} (${criterion.percentage}%)
           </th>
         `
       })
 
       pdfContent += `
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #28a745; color: white; font-size: 8px;">${gradeType.name.toUpperCase()} GRADE (1.0-5.0)</th>
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #6c757d; color: white; font-size: 8px;">REMARKS</th>
+            <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; background: #28a745; color: white; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '35px' : '50px'}; word-wrap: break-word;">${gradeType.name.toUpperCase()} GRADE</th>
+            <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; background: #6c757d; color: white; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '30px' : '40px'};">REMARKS</th>
           </tr>
         </thead>
       `
 
-      // Add component sub-headers
+      // Add component sub-headers with dynamic sizing
       pdfContent += `
         <tr style="background: #f8f9fa;">
-          <td style="border: 0.25px solid #333; padding: 2px;"></td>
-          <td style="border: 0.25px solid #333; padding: 2px;"></td>
-          <td style="border: 0.25px solid #333; padding: 2px;"></td>
-          <td style="border: 0.25px solid #333; padding: 2px;"></td>
+          <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+          <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+          <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+          <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
       `
 
       criteria.forEach(criterion => {
         const comps = components.get(criterion.id) || []
         const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
         visibleComps.forEach(comp => {
-          pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">${comp.name}<br/>max:${comp.maxScore}</td>`
+          const compName = abbreviateName(comp.name)
+          pdfContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '20px' : '30px'}; word-wrap: break-word;">${compName}<br/>max:${comp.maxScore}</td>`
         })
         if (visibleComps.length > 0) {
-          pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">TOT</td>`
-          pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">GE</td>`
-          pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">WE</td>`
+          pdfContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '20px' : '25px'};">TOT</td>`
+          pdfContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '18px' : '25px'};">GE</td>`
+          pdfContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '18px' : '25px'};">WE</td>`
         }
       })
 
       pdfContent += `
-          <td style="border: 0.25px solid #333; padding: 2px;"></td>
-          <td style="border: 0.25px solid #333; padding: 2px;"></td>
+          <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+          <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
         </tr>
       `
 
       // Calculate page structure for separate PDF pages
-      const studentsPerPage = 30
-      const totalStudents = enrollments.length
+      // Adjust students per page based on orientation
+      const studentsPerPage = useLandscape ? 35 : 30
+      const totalStudents = sortedEnrollments.length
       const totalPages = Math.ceil(totalStudents / studentsPerPage)
 
-      // Create PDF in portrait mode
+      // Create PDF with dynamic orientation
       const pdf = new jsPDF({
-        orientation: 'portrait',
+        orientation: useLandscape ? 'landscape' : 'portrait',
         unit: 'mm',
         format: 'a4'
       })
@@ -1261,13 +1349,13 @@ export function EnhancedGradesSheet({
         
         // Calculate which students should be on this page
         const startIndex = page * studentsPerPage
-        const endIndex = Math.min(startIndex + studentsPerPage, enrollments.length)
-        const studentsOnThisPage = enrollments.slice(startIndex, endIndex)
+        const endIndex = Math.min(startIndex + studentsPerPage, sortedEnrollments.length)
+        const studentsOnThisPage = sortedEnrollments.slice(startIndex, endIndex)
         
         
         // Create a new HTML content for this specific page
         let pageContent = `
-          <div style="width: 100%; background: white; font-family: Arial, sans-serif;">
+          <div style="width: 100%; background: white; font-family: Arial, sans-serif; padding: 0 5px;">
             <!-- Header Section with Logo -->
             <div style="display: flex; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 10px;">
               <div style="flex: 1; text-align: left;">
@@ -1314,59 +1402,70 @@ export function EnhancedGradesSheet({
             </div>
 
             <!-- Grades Table -->
-            <div style="overflow-x: auto;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 8px; border: 0.25px solid #333;">
+            <div style="overflow: visible; width: 100%;">
+              <table style="width: 100%; border-collapse: collapse; font-size: ${baseFontSize}px; border: 0.25px solid #333; table-layout: ${useLandscape ? 'auto' : 'fixed'}; min-width: fit-content; vertical-align: middle;">
+                <style>
+                  table, table td, table th { 
+                    vertical-align: middle !important; 
+                  }
+                  table td, table th { 
+                    display: table-cell !important;
+                    text-align: center !important;
+                  }
+                </style>
                 <thead>
                   <tr style="background: #333; color: white;">
-                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">#</th>
-                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">First Name</th>
-                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">Last Name</th>
-                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;">M.I.</th>
+                    <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '15px' : '20px'}; width: ${useLandscape ? '15px' : '20px'};">#</th>
+                    <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '40px' : '60px'}; width: ${useLandscape ? '40px' : '60px'}; word-wrap: break-word;">First Name</th>
+                    <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '50px' : '70px'}; width: ${useLandscape ? '50px' : '70px'}; word-wrap: break-word;">Last Name</th>
+                    <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '15px' : '20px'}; width: ${useLandscape ? '15px' : '20px'};">M.I.</th>
         `
 
-        // Add criteria headers
+        // Add criteria headers with dynamic sizing
         criteria.forEach(criterion => {
           const comps = components.get(criterion.id) || []
           const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
+          const colspan = visibleComps.length + (visibleComps.length > 0 ? 3 : 0)
           pageContent += `
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;" colspan="${visibleComps.length + (visibleComps.length > 0 ? 3 : 0)}">
-              ${criterion.name} (${criterion.percentage}%)
+            <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; font-size: ${headerFontSize}px; word-wrap: break-word;" colspan="${colspan}">
+              ${abbreviateNames ? criterion.name.replace(/Class Participation/gi, 'CP').replace(/Major Exam/gi, 'MajEx') : criterion.name} (${criterion.percentage}%)
             </th>
           `
         })
 
         pageContent += `
-                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #28a745; color: white; font-size: 8px;">${gradeType.name.toUpperCase()} GRADE (1.0-5.0)</th>
-                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #6c757d; color: white; font-size: 8px;">REMARKS</th>
+                    <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; background: #28a745; color: white; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '35px' : '50px'}; word-wrap: break-word;">${gradeType.name.toUpperCase()} GRADE</th>
+                    <th style="border: 0.25px solid #333; padding: ${headerPadding}; text-align: center; vertical-align: middle; font-weight: bold; background: #6c757d; color: white; font-size: ${headerFontSize}px; min-width: ${useLandscape ? '30px' : '40px'};">REMARKS</th>
                   </tr>
                 </thead>
         `
 
-        // Add component sub-headers
+        // Add component sub-headers with dynamic sizing
         pageContent += `
           <tr style="background: #f8f9fa;">
-            <td style="border: 0.25px solid #333; padding: 2px;"></td>
-            <td style="border: 0.25px solid #333; padding: 2px;"></td>
-            <td style="border: 0.25px solid #333; padding: 2px;"></td>
-            <td style="border: 0.25px solid #333; padding: 2px;"></td>
+            <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+            <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+            <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+            <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
         `
 
         criteria.forEach(criterion => {
           const comps = components.get(criterion.id) || []
           const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
           visibleComps.forEach(comp => {
-            pageContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">${comp.name}<br/>max:${comp.maxScore}</td>`
+            const compName = abbreviateName(comp.name)
+            pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '20px' : '30px'}; word-wrap: break-word;">${compName}<br/>max:${comp.maxScore}</td>`
           })
           if (visibleComps.length > 0) {
-            pageContent += `<td style=\"border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;\">TOT</td>`
-            pageContent += `<td style=\"border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;\">GE</td>`
-            pageContent += `<td style=\"border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;\">WE</td>`
+            pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '20px' : '25px'};">TOT</td>`
+            pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '18px' : '25px'};">GE</td>`
+            pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px; min-width: ${useLandscape ? '18px' : '25px'};">WE</td>`
           }
         })
 
         pageContent += `
-            <td style="border: 0.25px solid #333; padding: 2px;"></td>
-            <td style="border: 0.25px solid #333; padding: 2px;"></td>
+            <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
+            <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle;"></td>
           </tr>
         `
 
@@ -1384,13 +1483,13 @@ export function EnhancedGradesSheet({
           
           pageContent += `
             <tr style="background: ${studentStatusValue === 'INC' || studentStatusValue === 'DROPPED' ? '#fff3cd' : 'transparent'};">
-              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${globalIndex + 1}</td>
-              <td style="border: 0.25px solid #333; padding: 3px; font-size: 8px;">${student.firstName.toUpperCase()}</td>
-              <td style="border: 0.25px solid #333; padding: 3px; font-size: 8px;">${student.lastName.toUpperCase()}</td>
-              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${student.middleName?.[0]?.toUpperCase() || ""}</td>
+              <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${baseFontSize}px;">${globalIndex + 1}</td>
+              <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${baseFontSize}px; word-wrap: break-word;">${student.firstName.toUpperCase()}</td>
+              <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${baseFontSize}px; word-wrap: break-word;">${student.lastName.toUpperCase()}</td>
+              <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${baseFontSize}px;">${student.middleName?.[0]?.toUpperCase() || ""}</td>
           `
 
-          // Add criteria data
+          // Add criteria data with dynamic sizing
           criteria.forEach(criterion => {
             const comps = components.get(criterion.id) || []
             let totalScore = 0
@@ -1404,13 +1503,13 @@ export function EnhancedGradesSheet({
                 hasAnyScore = true
               }
               maxScore += comp.maxScore
-              pageContent += `<td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${score || 0}</td>`
+              pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px;">${score || 0}</td>`
             })
 
             const { ge, we } = calculateCategoryGrade(student.id, criterion.id)
-            pageContent += `<td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${totalScore}</td>`
-            pageContent += `<td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${ge.toFixed(2)}</td>`
-            pageContent += `<td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${we.toFixed(2)}</td>`
+            pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px;">${totalScore}</td>`
+            pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px;">${ge.toFixed(2)}</td>`
+            pageContent += `<td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-size: ${componentFontSize}px;">${we.toFixed(2)}</td>`
           })
 
           // Handle special statuses
@@ -1435,10 +1534,10 @@ export function EnhancedGradesSheet({
           }
           
           pageContent += `
-              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-weight: bold; background: ${displayGrade >= 1.0 && displayGrade <= 3.0 ? '#d4edda' : '#f8d7da'}; color: ${displayGrade >= 1.0 && displayGrade <= 3.0 ? '#155724' : '#721c24'}; font-size: 8px;">
+              <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-weight: bold; background: ${displayGrade >= 1.0 && displayGrade <= 3.0 ? '#d4edda' : '#f8d7da'}; color: ${displayGrade >= 1.0 && displayGrade <= 3.0 ? '#155724' : '#721c24'}; font-size: ${baseFontSize}px;">
                 ${finalGradeDisplay}
               </td>
-              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-weight: bold; background: ${remarksColor.bg}; color: ${remarksColor.text}; font-size: 8px;">${remarksDisplay}</td>
+              <td style="border: 0.25px solid #333; padding: ${cellPadding}; text-align: center; vertical-align: middle; font-weight: bold; background: ${remarksColor.bg}; color: ${remarksColor.text}; font-size: ${baseFontSize}px;">${remarksDisplay}</td>
             </tr>
           `
         })
@@ -1478,29 +1577,63 @@ export function EnhancedGradesSheet({
         pageContainer.style.position = 'absolute'
         pageContainer.style.left = '-9999px'
         pageContainer.style.top = '-9999px'
-        pageContainer.style.width = '800px'
+        pageContainer.style.width = containerWidth
+        pageContainer.style.minWidth = containerWidth
+        pageContainer.style.maxWidth = 'none'
+        pageContainer.style.overflow = 'visible'
         pageContainer.style.backgroundColor = 'white'
-        pageContainer.style.padding = '15px'
+        pageContainer.style.padding = '15px 5px'
         pageContainer.style.fontFamily = 'Arial, sans-serif'
-        pageContainer.style.fontSize = '10px'
+        pageContainer.style.fontSize = `${baseFontSize}px`
         pageContainer.style.lineHeight = '1.1'
         pageContainer.style.color = '#000000'
         pageContainer.innerHTML = pageContent
         
         document.body.appendChild(pageContainer)
 
-        // Wait for rendering
-        await new Promise(resolve => setTimeout(resolve, 100))
+        // Wait for rendering to ensure all content is laid out
+        await new Promise(resolve => setTimeout(resolve, 300))
+        
+        // Get the actual width of the table to ensure we capture all content
+        // Look for the table element inside the container
+        const table = pageContainer.querySelector('table') as HTMLTableElement
+        let actualWidth = useLandscape ? 1200 : 800
+        
+        if (table) {
+          // Use table scrollWidth to get the actual content width
+          actualWidth = Math.max(
+            table.scrollWidth,
+            table.offsetWidth,
+            pageContainer.scrollWidth,
+            useLandscape ? 1200 : 800
+          )
+        } else {
+          // Fallback to container width
+          actualWidth = Math.max(
+            pageContainer.scrollWidth,
+            pageContainer.offsetWidth,
+            useLandscape ? 1200 : 800
+          )
+        }
 
-        // Generate canvas for this page
+        // Generate canvas for this page - use scrollWidth to capture all content
         const pageCanvas = await html2canvas(pageContainer, {
           scale: 2,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
-          width: 800,
+          width: actualWidth,
           height: pageContainer.scrollHeight,
-          logging: false
+          windowWidth: actualWidth,
+          logging: false,
+          onclone: (clonedDoc) => {
+            // Ensure the cloned document has the correct width
+            const clonedContainer = clonedDoc.querySelector('div') as HTMLElement
+            if (clonedContainer) {
+              clonedContainer.style.width = `${actualWidth}px`
+              clonedContainer.style.overflow = 'visible'
+            }
+          }
         })
 
         // Clean up
@@ -1560,7 +1693,7 @@ export function EnhancedGradesSheet({
       const validationErrors: string[] = []
       
       studentScores.forEach((studentScoresMap, studentId) => {
-        const student = enrollments.find(e => e.student.id === studentId)?.student
+        const student = sortedEnrollments.find(e => e.student.id === studentId)?.student
         if (!student) return
         
         studentScoresMap.forEach((score, componentId) => {
@@ -1685,7 +1818,7 @@ export function EnhancedGradesSheet({
         let successCount = 0
         let errorCount = 0
         
-        for (const enrollment of enrollments) {
+        for (const enrollment of sortedEnrollments) {
           try {
             const finalGrade = calculateFinalGrade(enrollment.studentId)
             const remarks = getGradeDetails(finalGrade).label
@@ -1701,6 +1834,26 @@ export function EnhancedGradesSheet({
               status: studentStatusValue,
               allComponentScores
             })
+
+            // If status is DROPPED, propagate to all grade types before saving
+            if (studentStatusValue === 'DROPPED') {
+              try {
+                await fetch('/api/grades/update-status-all', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    studentId: enrollment.student.id,
+                    enrollmentId: enrollment.id,
+                    status: 'DROPPED',
+                    classId
+                  })
+                })
+              } catch (error) {
+                console.error("Error propagating DROPPED status:", error)
+              }
+            }
 
             const response = await fetch('/api/real-save', {
               method: 'POST',
@@ -1810,7 +1963,7 @@ export function EnhancedGradesSheet({
       await handleSaveAll()
       
       // Get school year from first enrollment
-      const schoolYearId = enrollments[0]?.schoolYearId
+      const schoolYearId = sortedEnrollments[0]?.schoolYearId
       
       if (!schoolYearId) {
         toast({
@@ -2352,7 +2505,7 @@ export function EnhancedGradesSheet({
             </tr>
           </thead>
           <tbody>
-            {enrollments.map((enrollment, index) => {
+            {sortedEnrollments.map((enrollment, index) => {
               const student = enrollment.student
               const currentGrade = calculateFinalGrade(student.id)
               const overallFinalGrade = calculateOverallFinalGrade(student.id)
