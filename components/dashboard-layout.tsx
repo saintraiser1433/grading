@@ -30,7 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -195,6 +195,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <Avatar className="h-8 w-8">
+                    <AvatarImage 
+                      src={session?.user?.name || session?.user?.email ? 
+                        `https://api.dicebear.com/8.x/adventurer/svg?seed=${encodeURIComponent(session.user.name || session.user.email || "default")}` 
+                        : undefined
+                      } 
+                      alt={session?.user.name || "User"} 
+                    />
                     <AvatarFallback className="bg-primary text-primary-foreground">
                       {session?.user.name ? getInitials(session.user.name) : "U"}
                     </AvatarFallback>

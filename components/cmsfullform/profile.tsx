@@ -2,6 +2,7 @@ import type React from "react"
 import { LogOut, MoveUpRight, Settings, CreditCard, FileText } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { getAvatarUrl } from "@/lib/avatar-utils"
 
 interface MenuItem {
   label: string
@@ -21,7 +22,7 @@ interface Profile01Props {
 const defaultProfile = {
   name: "Alex Watson",
   role: "Prompt Engineer",
-  avatar: "https://ferf1mheo22r9ira.public.blob.vercel-storage.com/avatar-02-albo9B0tWOSLXCVZh9rX9KFxXIVWMr.png",
+  avatar: "https://api.dicebear.com/8.x/adventurer/svg?seed=AlexWatson",
   subscription: "Free Trial",
 } satisfies Required<Profile01Props>
 
@@ -59,7 +60,7 @@ export default function Profile01({
           <div className="flex items-center gap-4 mb-8">
             <div className="relative shrink-0">
               <Image
-                src={avatar}
+                src={getAvatarUrl(name || avatar)}
                 alt={name}
                 width={72}
                 height={72}

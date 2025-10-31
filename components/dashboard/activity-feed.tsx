@@ -149,7 +149,10 @@ export default function ActivityFeed() {
                   {activity.user && (
                     <div className="flex items-center space-x-2">
                       <Avatar className="h-6 w-6">
-                        <AvatarImage src={activity.user.avatar || "/placeholder.svg"} alt={activity.user.name} />
+                        <AvatarImage 
+                          src={activity.user.avatar || `https://api.dicebear.com/8.x/adventurer/svg?seed=${encodeURIComponent(activity.user.name || "default")}`} 
+                          alt={activity.user.name} 
+                        />
                         <AvatarFallback className="text-xs">
                           {activity.user.name
                             .split(" ")

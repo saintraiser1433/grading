@@ -112,7 +112,9 @@ export function PendingStudentsTable({ students, onApprove, onReject }: PendingS
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src="" />
+                          <AvatarImage 
+                            src={`https://api.dicebear.com/8.x/adventurer/svg?seed=${encodeURIComponent(`${student.firstName}${student.lastName}${student.email}`)}`} 
+                          />
                           <AvatarFallback>
                             {getInitials(student.firstName, student.lastName, student.middleName)}
                           </AvatarFallback>

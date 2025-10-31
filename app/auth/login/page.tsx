@@ -46,91 +46,109 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900 px-4 py-12 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex items-center justify-center">
+      <Card className="w-full max-w-5xl overflow-hidden">
+        <div className="grid md:grid-cols-2">
+          {/* Left Column - Login Form */}
+          <div className="p-6 md:p-8 lg:p-10">
+            <CardHeader className="space-y-4 text-center md:text-left px-0 pt-0">
+              <div className="mx-auto md:mx-0 flex items-center justify-center md:justify-start">
+                <Image
+                  src="/gitlogo.png"
+                  alt="GIT Logo"
+                  width={80}
+                  height={80}
+                  className="rounded-full"
+                />
+              </div>
+              <div>
+                <CardTitle className="text-2xl font-bold text-slate-900 dark:text-slate-100">GIT Grading System</CardTitle>
+                <CardDescription className="mt-2 text-slate-600 dark:text-slate-400">
+                  Sign in to your account to continue
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="px-0">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="your.email@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Signing in..." : "Sign In"}
+                </Button>
+
+                <div className="text-center md:text-left text-sm text-gray-500 dark:text-slate-400 space-y-2">
+                  <div>
+                    <Link href="/auth/forgot" className="hover:text-primary dark:hover:text-primary-foreground">
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <div>
+                    Don't have an account?{" "}
+                    <Link href="/auth/register" className="hover:text-primary dark:hover:text-primary-foreground font-medium">
+                      Sign up here
+                    </Link>
+                  </div>
+                </div>
+              </form>
+
+              {/* Demo Credentials */}
+              <div className="mt-6 space-y-2 rounded-lg bg-gray-50 dark:bg-slate-800 p-4">
+                <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Demo Credentials:</p>
+                <div className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
+                  <p>Admin: admin@git.edu / admin123</p>
+                  <p>Teacher: teacher@git.edu / teacher123</p>
+                  <p>Student: student@git.edu / student123</p>
+                </div>
+              </div>
+            </CardContent>
+          </div>
+
+          {/* Right Column - Banner Image */}
+          <div className="hidden md:block relative min-h-[500px]">
+            <div className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 z-10" />
             <Image
-              src="/gitlogo.png"
-              alt="GIT Logo"
-              width={80}
-              height={80}
-              className="rounded-full"
+              src="/banner.jpg"
+              alt="Banner"
+              fill
+              className="object-cover"
+              priority
+              sizes="(max-width: 768px) 0vw, 50vw"
             />
           </div>
-          <div>
-            <CardTitle className="text-2xl font-bold text-slate-900 dark:text-slate-100">GIT Grading System</CardTitle>
-            <CardDescription className="mt-2 text-slate-600 dark:text-slate-400">
-              Sign in to your account to continue
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your.email@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? "Signing in..." : "Sign In"}
-            </Button>
-
-            <div className="text-center text-sm text-gray-500 dark:text-slate-400 space-y-2">
-              <div>
-                <Link href="/auth/forgot" className="hover:text-primary dark:hover:text-primary-foreground">
-                  Forgot password?
-                </Link>
-              </div>
-              <div>
-                Don't have an account?{" "}
-                <Link href="/auth/register" className="hover:text-primary dark:hover:text-primary-foreground font-medium">
-                  Sign up here
-                </Link>
-              </div>
-            </div>
-          </form>
-
-          {/* Demo Credentials */}
-          <div className="mt-6 space-y-2 rounded-lg bg-gray-50 dark:bg-slate-800 p-4">
-            <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Demo Credentials:</p>
-            <div className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
-              <p>Admin: admin@git.edu / admin123</p>
-              <p>Teacher: teacher@git.edu / teacher123</p>
-              <p>Student: student@git.edu / student123</p>
-            </div>
-          </div>
-        </CardContent>
+        </div>
       </Card>
     </div>
   )

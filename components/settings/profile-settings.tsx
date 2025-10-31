@@ -69,7 +69,7 @@ export default function ProfileSettings() {
         <div className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
           <Avatar className="h-16 w-16">
             <AvatarImage
-              src="https://ferf1mheo22r9ira.public.blob.vercel-storage.com/avatar-01-n0x8HFv8EUetf9z6ht0wScJKoTHqf8.png"
+              src="https://api.dicebear.com/8.x/adventurer/svg?seed=profile"
               alt="Profile"
             />
             <AvatarFallback>AW</AvatarFallback>

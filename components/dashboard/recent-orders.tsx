@@ -102,7 +102,10 @@ export default function RecentOrders() {
           >
             <div className="flex items-center space-x-4">
               <Avatar className="h-10 w-10">
-                <AvatarImage src={order.customer.avatar || "/placeholder.svg"} alt={order.customer.name} />
+                <AvatarImage 
+                  src={order.customer.avatar || `https://api.dicebear.com/8.x/adventurer/svg?seed=${encodeURIComponent(order.customer.name || "default")}`} 
+                  alt={order.customer.name} 
+                />
                 <AvatarFallback>
                   {order.customer.name
                     .split(" ")
