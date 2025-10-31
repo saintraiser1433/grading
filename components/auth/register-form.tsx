@@ -16,7 +16,6 @@ import { registerStudent, uploadEnrollmentDocument } from "@/lib/actions/student
 import { useToast } from "@/hooks/use-toast"
 
 export function RegisterForm() {
-  console.log("RegisterForm component rendering...")
   
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -36,7 +35,6 @@ export function RegisterForm() {
 
   // Test if component is working
   const testFunction = () => {
-    console.log("TEST FUNCTION CALLED!")
     alert("Component is working!")
   }
 
@@ -75,13 +73,9 @@ export function RegisterForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("=== FORM SUBMISSION STARTED ===")
-    console.log("Form data:", formData)
-    console.log("Documents:", documents.length)
     
     // Validate required fields
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.studentId || !formData.password) {
-      console.log("Validation failed - missing required fields")
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields.",
@@ -94,7 +88,6 @@ export function RegisterForm() {
 
     try {
       if (userType === "student") {
-        console.log("Registering student...")
         
         const registrationData = {
           firstName: formData.firstName,
@@ -105,43 +98,32 @@ export function RegisterForm() {
           password: formData.password,
         }
         
-        console.log("Registration data:", registrationData)
         
         // Register student
         const result = await registerStudent(registrationData)
 
-        console.log("Registration result:", result)
 
         if (result.success) {
-          console.log("Registration successful, uploading documents...")
-          console.log("Number of documents to upload:", documents.length)
-          console.log("Document types array:", documentTypes)
           
           // Upload documents
           for (let i = 0; i < documents.length; i++) {
             const file = documents[i]
             
-            console.log(`Uploading file ${i + 1}:`, file.name, "Size:", file.size, "Type:", file.type)
             
             try {
               // Upload file to server
               const formData = new FormData()
               formData.append('file', file)
               
-              console.log("Sending upload request to /api/upload")
               const uploadResponse = await fetch('/api/upload', {
                 method: 'POST',
                 body: formData,
               })
               
-              console.log("Upload response status:", uploadResponse.status)
               const uploadResult = await uploadResponse.json()
-              console.log("Upload result:", uploadResult)
               
               if (uploadResult.success) {
                 // Save document metadata to database
-                console.log("Saving document metadata to database...")
-                console.log("Document data being saved:", {
                   userId: result.data?.id || "",
                   fileName: uploadResult.data.fileName,
                   fileUrl: uploadResult.data.filePath,
@@ -158,10 +140,8 @@ export function RegisterForm() {
                   fileSize: uploadResult.data.fileSize,
                   documentType: documentTypes[i] as any,
                 })
-                console.log("Document save result:", docResult)
                 
                 if (docResult.success) {
-                  console.log(`✅ File ${i + 1} uploaded and saved successfully:`, uploadResult.data.fileName)
                 } else {
                   console.error(`❌ Failed to save document metadata for file ${i + 1}:`, docResult.error)
                 }
@@ -173,7 +153,6 @@ export function RegisterForm() {
             }
           }
 
-          console.log("All documents uploaded, showing success message...")
           
           toast({
             title: "Registration Successful!",
@@ -182,11 +161,9 @@ export function RegisterForm() {
           
           // Wait a moment for the toast to show, then redirect
           setTimeout(() => {
-            console.log("Redirecting to login...")
             window.location.href = "/auth/login"
           }, 2000)
         } else {
-          console.log("Registration failed:", result.error)
           toast({
             title: "Registration Failed",
             description: result.error || "Failed to register. Please try again.",
@@ -198,7 +175,6 @@ export function RegisterForm() {
         window.location.href = "/admin/register"
       }
     } catch (error) {
-      console.log("Registration error:", error)
       console.error("Full error details:", error)
       
       let errorMessage = "An unexpected error occurred. Please try again."
@@ -245,7 +221,6 @@ export function RegisterForm() {
             </div>
 
             <form onSubmit={(e) => {
-              console.log("FORM SUBMIT EVENT TRIGGERED!")
               handleSubmit(e)
             }} className="space-y-6">
 
@@ -492,7 +467,6 @@ export function RegisterForm() {
                   className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
                   disabled={isLoading}
                   onClick={() => {
-                    console.log("CREATE ACCOUNT BUTTON CLICKED!")
                   }}
                 >
                   {isLoading ? "Creating account..." : "Create account"}

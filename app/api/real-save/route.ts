@@ -6,9 +6,9 @@ export async function POST(request: NextRequest) {
     console.log("=== REAL SAVE API CALLED ===")
     
     const body = await request.json()
-    const { enrollmentId, classId, studentId, gradeTypeId, finalGrade, remarks } = body
+    const { enrollmentId, classId, studentId, gradeTypeId, finalGrade, remarks, status } = body
     
-    console.log("Received data:", { enrollmentId, classId, studentId, gradeTypeId, finalGrade, remarks })
+    console.log("Received data:", { enrollmentId, classId, studentId, gradeTypeId, finalGrade, remarks, status })
     
     // Validate required fields
     if (!enrollmentId || !classId || !studentId || !gradeTypeId) {
@@ -63,7 +63,8 @@ export async function POST(request: NextRequest) {
         where: { id: existingGrade.id },
         data: {
           grade: finalGrade,
-          remarks
+          remarks,
+          status: status || 'NORMAL'
         }
       })
       console.log("Grade updated:", grade)
@@ -76,7 +77,8 @@ export async function POST(request: NextRequest) {
           studentId,
           gradeTypeId,
           grade: finalGrade,
-          remarks
+          remarks,
+          status: status || 'NORMAL'
         }
       })
       console.log("Grade created:", grade)

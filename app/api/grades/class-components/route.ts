@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log("Loading class components for classId:", classId)
 
     // Get grading criteria for this class
     const criteria = await prisma.gradingCriteria.findMany({
@@ -29,7 +28,6 @@ export async function GET(request: NextRequest) {
       orderBy: { order: 'asc' }
     })
 
-    console.log("Found criteria:", criteria.length)
 
     // Flatten all components
     const allComponents = []
@@ -45,7 +43,6 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    console.log("Found components:", allComponents.length)
 
     return NextResponse.json({
       success: true,

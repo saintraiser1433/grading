@@ -3,12 +3,10 @@ import { prisma } from "@/lib/prisma"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("=== SAVE COMPONENT SCORE API CALLED ===")
     
     const body = await request.json()
     const { gradeId, componentId, score, maxScore } = body
     
-    console.log("Received data:", { gradeId, componentId, score, maxScore })
     
     // Validate required fields
     if (!gradeId || !componentId || score === undefined) {
@@ -30,7 +28,6 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
     
-    console.log("Grade found:", grade.id)
     
     // Check if component score already exists
     const existingScore = await prisma.componentScore.findFirst({
@@ -40,7 +37,6 @@ export async function POST(request: NextRequest) {
       }
     })
     
-    console.log("Existing component score:", existingScore)
     
     let componentScore
     if (existingScore) {
@@ -51,7 +47,6 @@ export async function POST(request: NextRequest) {
           score: parseFloat(score),
         }
       })
-      console.log("Component score updated:", componentScore)
     } else {
       // Create new component score
       componentScore = await prisma.componentScore.create({
@@ -61,7 +56,6 @@ export async function POST(request: NextRequest) {
           score: parseFloat(score),
         }
       })
-      console.log("Component score created:", componentScore)
     }
     
     return NextResponse.json({

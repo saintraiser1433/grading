@@ -385,14 +385,10 @@ export async function createOrUpdateGradeWithType(
   remarks?: string
 ) {
   try {
-    console.log("createOrUpdateGradeWithType called with:", {
-      enrollmentId,
-      classId,
-      studentId,
-      gradeTypeId,
-      finalGrade,
-      remarks
-    })
+    // Validate required parameters
+    if (!enrollmentId || !classId || !studentId || !gradeTypeId) {
+      throw new Error("Missing required parameters")
+    }
 
     // Check if grade already exists
     let grade = await prisma.grade.findFirst({
@@ -403,7 +399,6 @@ export async function createOrUpdateGradeWithType(
       },
     })
 
-    console.log("Existing grade found:", grade)
 
     if (grade) {
       // Update existing grade
@@ -414,7 +409,6 @@ export async function createOrUpdateGradeWithType(
           remarks,
         },
       })
-      console.log("Grade updated:", grade)
     } else {
       // Create new grade
       grade = await prisma.grade.create({
@@ -427,7 +421,6 @@ export async function createOrUpdateGradeWithType(
           remarks,
         },
       })
-      console.log("Grade created:", grade)
     }
 
     return { success: true, data: grade }

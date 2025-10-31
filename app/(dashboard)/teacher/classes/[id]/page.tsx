@@ -3,6 +3,8 @@ import { redirect, notFound } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { getClassById } from "@/lib/actions/class.actions"
 import { prisma } from "@/lib/prisma"
+import { getVpAcademics } from "@/lib/actions/globalsettings.actions"
+import { getActiveDepartmentHeads } from "@/lib/actions/departmenthead.actions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, Users, ClipboardList } from "lucide-react"
@@ -35,7 +37,7 @@ export default async function ClassDetailPage({ params }: { params: { id: string
   }
 
   // Fetch grading types, global criteria, and submission statuses
-  const [gradeTypes, globalCriteria, submissions] = await Promise.all([
+  const [gradeTypes, globalCriteria, submissions, vpAcademicsGlobal, activeDepartmentHeads] = await Promise.all([
     prisma.gradeType.findMany({
       where: { isActive: true },
       orderBy: { order: "asc" },
@@ -66,6 +68,8 @@ export default async function ClassDetailPage({ params }: { params: { id: string
         id: true,
       },
     }),
+    getVpAcademics(),
+    getActiveDepartmentHeads(),
   ])
 
   // Create a map of gradeTypeId to submission status
@@ -78,12 +82,6 @@ export default async function ClassDetailPage({ params }: { params: { id: string
   })
 
   // Debug logging
-  console.log("=== CLASS DETAIL PAGE DEBUG ===")
-  console.log("Class ID:", params.id)
-  console.log("Raw submissions from DB:", submissions)
-  console.log("Submission status map:", Array.from(submissionStatusMap.entries()))
-  console.log("Grade types:", gradeTypes.map(gt => ({ id: gt.id, name: gt.name })))
-  console.log("=== END DEBUG ===")
 
   return (
     <div className="space-y-6">
@@ -168,6 +166,8 @@ export default async function ClassDetailPage({ params }: { params: { id: string
                 submissionId={submissionId}
                 allSubmissionStatuses={submissionStatusMap}
                 showApprovalButtons={false}
+                vpAcademicsGlobal={typeof vpAcademicsGlobal === 'string' ? vpAcademicsGlobal : (vpAcademicsGlobal as any)?.data || undefined}
+                departmentHeadGlobal={(activeDepartmentHeads as any)?.data?.[0]?.name}
               />
             </TabsContent>
           )

@@ -23,6 +23,8 @@ import {
   GraduationCap,
   BookOpen,
   Calculator,
+  Clock,
+  UserX,
 } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -85,6 +87,9 @@ interface GradesSheetProps {
   adminId?: string
   submissionStatus?: 'PENDING' | 'APPROVED' | 'DECLINED' | null
   allSubmissionStatuses?: Map<string, { status: 'PENDING' | 'APPROVED' | 'DECLINED', id: string }>
+  vpAcademicsGlobal?: string
+  departmentHeadGlobal?: string
+  showApprovalButtons?: boolean
 }
 
 interface Component {
@@ -152,6 +157,26 @@ const getGradeDetails = (grade: number) => {
   return { color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950", icon: XCircle, label: "Failed" }
 }
 
+// Get grade description for PDF export
+const getGradeDescriptionForPDF = (grade: number): string => {
+  if (grade >= 1.0 && grade < 1.5) return "Excellent"
+  if (grade >= 1.5 && grade < 2.0) return "Very Good"
+  if (grade >= 2.0 && grade < 2.5) return "Good"
+  if (grade >= 2.5 && grade < 3.0) return "Satisfactory"
+  if (grade >= 3.0 && grade < 5.0) return "Passing"
+  return "Failed"
+}
+
+// Get color coding for remarks based on grade
+const getRemarksColor = (grade: number): { bg: string; text: string } => {
+  if (grade >= 1.0 && grade < 1.5) return { bg: '#d4edda', text: '#155724' } // Excellent - Green
+  if (grade >= 1.5 && grade < 2.0) return { bg: '#d1ecf1', text: '#0c5460' } // Very Good - Light Blue
+  if (grade >= 2.0 && grade < 2.5) return { bg: '#cce5ff', text: '#004085' } // Good - Blue
+  if (grade >= 2.5 && grade < 3.0) return { bg: '#e2e3e5', text: '#383d41' } // Satisfactory - Gray
+  if (grade >= 3.0 && grade < 5.0) return { bg: '#fff3cd', text: '#856404' } // Passing - Yellow
+  return { bg: '#f8d7da', text: '#721c24' } // Failed - Red
+}
+
 export function EnhancedGradesSheet({
   classId,
   isMidterm,
@@ -164,7 +189,9 @@ export function EnhancedGradesSheet({
   submissionId,
   adminId,
   submissionStatus = null,
-  allSubmissionStatuses = new Map()
+  allSubmissionStatuses = new Map(),
+  vpAcademicsGlobal,
+  departmentHeadGlobal
 }: GradesSheetProps) {
   const [components, setComponents] = useState<Map<string, Component[]>>(new Map())
   const [studentScores, setStudentScores] = useState<Map<string, Map<string, number>>>(new Map())
@@ -178,6 +205,7 @@ export function EnhancedGradesSheet({
   const [addComponentDialog, setAddComponentDialog] = useState<string | null>(null)
   const [newComponent, setNewComponent] = useState({ name: "", maxScore: 10 })
   const [showSubmitConfirmation, setShowSubmitConfirmation] = useState(false)
+  const [studentStatus, setStudentStatus] = useState<Map<string, 'NORMAL' | 'INC' | 'DROPPED'>>(new Map())
   
   // Ref for PDF generation
   const gradingSheetRef = useRef<HTMLDivElement>(null)
@@ -245,6 +273,16 @@ export function EnhancedGradesSheet({
         console.log("Loaded existing grades:", result.grades)
         const gradesMap = new Map(Object.entries(result.grades))
         setExistingGrades(gradesMap)
+        
+        // Load status for each student from the grades
+        const statusMap = new Map<string, 'NORMAL' | 'INC' | 'DROPPED'>()
+        Object.entries(result.grades).forEach(([studentId, gradeData]: [string, any]) => {
+          if (gradeData && gradeData.status) {
+            statusMap.set(studentId, gradeData.status)
+          }
+        })
+        setStudentStatus(statusMap)
+        console.log("Loaded student statuses:", statusMap)
       } else {
         console.error("Failed to load grades:", result.error)
       }
@@ -391,7 +429,6 @@ export function EnhancedGradesSheet({
   const handleScoreChange = (studentId: string, componentId: string, value: string) => {
     // Prevent changes when sheet is disabled
     if (finalIsReadOnly) {
-      console.log("❌ Score change blocked - sheet is in read-only mode")
       return
     }
     
@@ -438,6 +475,18 @@ export function EnhancedGradesSheet({
       studentMap.set(componentId, numericScore)
       newScores.set(studentId, studentMap)
       return newScores
+    })
+  }
+
+  const handleStatusChange = (studentId: string, status: 'NORMAL' | 'INC' | 'DROPPED') => {
+    if (finalIsReadOnly) {
+      return
+    }
+    
+    setStudentStatus(prev => {
+      const newStatus = new Map(prev)
+      newStatus.set(studentId, status)
+      return newStatus
     })
   }
 
@@ -745,11 +794,14 @@ export function EnhancedGradesSheet({
         'MI',
         ...criteria.flatMap(criterion => {
           const comps = components.get(criterion.id) || []
+          const visibleComps = comps.filter(c => c.name && c.name.trim() !== "")
           return [
-            ...comps.map(comp => comp.name),
-            `${criterion.name} TOT`,
-            `${criterion.name} GE`,
-            `${criterion.name} WE`
+            ...visibleComps.map(comp => comp.name),
+            ...(visibleComps.length > 0 ? [
+              `${criterion.name} TOT`,
+              `${criterion.name} GE`,
+              `${criterion.name} WE`
+            ] : [])
           ]
         }),
         'Weighted Contribution',
@@ -767,21 +819,24 @@ export function EnhancedGradesSheet({
         
         const row = [
           index + 1,
-          student.lastName,
-          student.firstName,
-          student.middleName?.[0] || "",
+          student.lastName.toUpperCase(),
+          student.firstName.toUpperCase(),
+          student.middleName?.[0]?.toUpperCase() || "",
           ...criteria.flatMap(criterion => {
             const comps = components.get(criterion.id) || []
+            const visibleComps = comps.filter(c => c.name && c.name.trim() !== "")
             const categoryGrade = calculateCategoryGrade(student.id, criterion.id)
             
             return [
-              ...comps.map(comp => {
+              ...visibleComps.map(comp => {
                 const score = getStudentScore(student.id, comp.id)
                 return score === null ? "" : score
               }),
-              categoryGrade.totalScore,
-              categoryGrade.ge,
-              categoryGrade.we
+              ...(visibleComps.length > 0 ? [
+                categoryGrade.totalScore,
+                categoryGrade.ge,
+                categoryGrade.we
+              ] : [])
             ]
           }),
           weightedContribution.toFixed(2),
@@ -1042,7 +1097,7 @@ export function EnhancedGradesSheet({
           <!-- Grading Scale -->
           <div style="margin-bottom: 12px;">
             <h3 style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold;">Grading Scale (1.0 - 5.0)</h3>
-            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; font-size: 8px;">
+            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; font-size: 8px;">
               <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.0<br/>(98-100%)<br/>Excellent</div>
               <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d1ecf1;">1.25<br/>(95-97%)<br/>Excellent</div>
               <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.5<br/>(92-94%)<br/>Very Good</div>
@@ -1053,6 +1108,8 @@ export function EnhancedGradesSheet({
               <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #e2e3e5;">2.75<br/>(77-79%)<br/>Satisfactory</div>
               <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fff3cd;">3.0<br/>(75-76%)<br/>Passing</div>
               <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #f8d7da;">5.0<br/>(Below 75%)<br/>Failed</div>
+              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #ffeaa7;">INC<br/>(Incomplete)<br/>Incomplete</div>
+              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fab1a0;">DROPPED<br/>(Dropped)<br/>Dropped</div>
             </div>
           </div>
 
@@ -1074,16 +1131,17 @@ export function EnhancedGradesSheet({
       // Add criteria headers
       criteria.forEach(criterion => {
         const comps = components.get(criterion.id) || []
+        const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
         pdfContent += `
-          <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;" colspan="${comps.length + 3}">
+          <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;" colspan="${visibleComps.length + (visibleComps.length > 0 ? 3 : 0)}">
             ${criterion.name} (${criterion.percentage}%)
           </th>
         `
       })
 
       pdfContent += `
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #007bff; color: white; font-size: 8px;">WEIGHTED CONTRIBUTION</th>
             <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #28a745; color: white; font-size: 8px;">${gradeType.name.toUpperCase()} GRADE (1.0-5.0)</th>
+            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #6c757d; color: white; font-size: 8px;">REMARKS</th>
           </tr>
         </thead>
       `
@@ -1099,12 +1157,15 @@ export function EnhancedGradesSheet({
 
       criteria.forEach(criterion => {
         const comps = components.get(criterion.id) || []
-        comps.forEach(comp => {
+        const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
+        visibleComps.forEach(comp => {
           pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">${comp.name}<br/>max:${comp.maxScore}</td>`
         })
-        pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">TOT</td>`
-        pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">GE</td>`
-        pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">WE</td>`
+        if (visibleComps.length > 0) {
+          pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">TOT</td>`
+          pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">GE</td>`
+          pdfContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">WE</td>`
+        }
       })
 
       pdfContent += `
@@ -1124,6 +1185,69 @@ export function EnhancedGradesSheet({
         unit: 'mm',
         format: 'a4'
       })
+
+      // Fetch and convert logo to Base64
+      let gitLogoBase64 = ''
+      try {
+        // Try multiple possible paths for the logo
+        const possiblePaths = [
+          '/gitlogo.png',
+          '/app/assets/images/gitlogo.png',
+          './gitlogo.png',
+          window.location.origin + '/gitlogo.png',
+          window.location.origin + '/app/assets/images/gitlogo.png'
+        ]
+        
+        let logoResponse = null
+        for (const path of possiblePaths) {
+          try {
+            logoResponse = await fetch(path)
+            if (logoResponse.ok) {
+              break
+            }
+          } catch (e) {
+            continue
+          }
+        }
+        
+        if (!logoResponse || !logoResponse.ok) {
+          throw new Error(`Failed to load logo from any path`)
+        }
+        
+        const logoBlob = await logoResponse.blob()
+        gitLogoBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(logoBlob)
+        })
+        
+        console.log("Logo loaded successfully:", gitLogoBase64.substring(0, 50) + "...")
+      } catch (error) {
+        console.error("Error loading GIT logo for PDF:", error)
+        // Create a simple text-based logo as fallback
+        const canvas = document.createElement('canvas')
+        canvas.width = 60
+        canvas.height = 60
+        const ctx = canvas.getContext('2d')
+        
+        if (ctx) {
+          // Draw a simple circular logo with text
+          ctx.fillStyle = '#1e40af'
+          ctx.beginPath()
+          ctx.arc(30, 30, 28, 0, 2 * Math.PI)
+          ctx.fill()
+          
+          ctx.fillStyle = 'white'
+          ctx.font = 'bold 8px Arial'
+          ctx.textAlign = 'center'
+          ctx.fillText('GIT', 30, 25)
+          ctx.font = '6px Arial'
+          ctx.fillText('LOGO', 30, 35)
+        }
+        
+        gitLogoBase64 = canvas.toDataURL('image/png')
+      }
 
       const pdfWidth = pdf.internal.pageSize.getWidth()
       const pdfHeight = pdf.internal.pageSize.getHeight()
@@ -1146,14 +1270,14 @@ export function EnhancedGradesSheet({
           <div style="width: 100%; background: white; font-family: Arial, sans-serif;">
             <!-- Header Section with Logo -->
             <div style="display: flex; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 10px;">
-              <div style="flex: 0 0 auto; margin-right: 15px;">
-                <img src="/app/assets/images/gitlogo.png" alt="GIT Logo" style="width: 60px; height: 60px; object-fit: contain;" />
-              </div>
-              <div style="flex: 1; text-align: center;">
+              <div style="flex: 1; text-align: left;">
                 <h1 style="margin: 0; font-size: 16px; font-weight: bold;">GLAN INSTITUTE OF TECHNOLOGY</h1>
                 <p style="margin: 2px 0; font-size: 10px;">Municipality of Glan, Province of Sarangani, Philippines 9517</p>
                 <h2 style="margin: 5px 0; font-size: 14px; font-weight: bold;">GRADE SHEET - ${gradeType.name.toUpperCase()}</h2>
                 <p style="margin: 2px 0; font-size: 10px;">A.Y. 2024-2025 • FIRST SEMESTER</p>
+              </div>
+              <div style="flex: 0 0 auto; margin-left: 15px;">
+                <img src="${gitLogoBase64}" alt="GIT Logo" style="width: 60px; height: 60px; object-fit: contain;" />
               </div>
             </div>
 
@@ -1173,7 +1297,7 @@ export function EnhancedGradesSheet({
             <!-- Grading Scale -->
             <div style="margin-bottom: 12px;">
               <h3 style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold;">Grading Scale (1.0 - 5.0)</h3>
-              <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; font-size: 8px;">
+              <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; font-size: 8px;">
                 <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.0<br/>(98-100%)<br/>Excellent</div>
                 <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d1ecf1;">1.25<br/>(95-97%)<br/>Excellent</div>
                 <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.5<br/>(92-94%)<br/>Very Good</div>
@@ -1184,6 +1308,8 @@ export function EnhancedGradesSheet({
                 <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #e2e3e5;">2.75<br/>(77-79%)<br/>Satisfactory</div>
                 <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fff3cd;">3.0<br/>(75-76%)<br/>Passing</div>
                 <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #f8d7da;">5.0<br/>(Below 75%)<br/>Failed</div>
+                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #ffeaa7;">INC<br/>(Incomplete)<br/>Incomplete</div>
+                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fab1a0;">DROPPED<br/>(Dropped)<br/>Dropped</div>
               </div>
             </div>
 
@@ -1201,16 +1327,17 @@ export function EnhancedGradesSheet({
         // Add criteria headers
         criteria.forEach(criterion => {
           const comps = components.get(criterion.id) || []
+          const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
           pageContent += `
-            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;" colspan="${comps.length + 3}">
+            <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; font-size: 8px;" colspan="${visibleComps.length + (visibleComps.length > 0 ? 3 : 0)}">
               ${criterion.name} (${criterion.percentage}%)
             </th>
           `
         })
 
         pageContent += `
-                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #007bff; color: white; font-size: 8px;">WEIGHTED CONTRIBUTION</th>
                     <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #28a745; color: white; font-size: 8px;">${gradeType.name.toUpperCase()} GRADE (1.0-5.0)</th>
+                    <th style="border: 0.25px solid #333; padding: 4px; text-align: center; font-weight: bold; background: #6c757d; color: white; font-size: 8px;">REMARKS</th>
                   </tr>
                 </thead>
         `
@@ -1226,12 +1353,15 @@ export function EnhancedGradesSheet({
 
         criteria.forEach(criterion => {
           const comps = components.get(criterion.id) || []
-          comps.forEach(comp => {
+          const visibleComps = comps.filter(c => c.name && c.name.trim() !== '')
+          visibleComps.forEach(comp => {
             pageContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">${comp.name}<br/>max:${comp.maxScore}</td>`
           })
-          pageContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">TOT</td>`
-          pageContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">GE</td>`
-          pageContent += `<td style="border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;">WE</td>`
+          if (visibleComps.length > 0) {
+            pageContent += `<td style=\"border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;\">TOT</td>`
+            pageContent += `<td style=\"border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;\">GE</td>`
+            pageContent += `<td style=\"border: 0.25px solid #333; padding: 2px; text-align: center; font-size: 7px;\">WE</td>`
+          }
         })
 
         pageContent += `
@@ -1248,12 +1378,16 @@ export function EnhancedGradesSheet({
           const overallGrade = calculateOverallFinalGrade(student.id)
           const displayGrade = isFinalGradeType ? overallGrade : currentGrade
 
+          const studentStatusValue = studentStatus.get(student.id) || 'NORMAL'
+          const statusDisplay = studentStatusValue === 'NORMAL' ? 'Normal' : studentStatusValue
+          const statusBgColor = studentStatusValue === 'INC' ? '#ffeaa7' : studentStatusValue === 'DROPPED' ? '#fab1a0' : '#f8f9fa'
+          
           pageContent += `
-            <tr>
+            <tr style="background: ${studentStatusValue === 'INC' || studentStatusValue === 'DROPPED' ? '#fff3cd' : 'transparent'};">
               <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${globalIndex + 1}</td>
-              <td style="border: 0.25px solid #333; padding: 3px; font-size: 8px;">${student.firstName}</td>
-              <td style="border: 0.25px solid #333; padding: 3px; font-size: 8px;">${student.lastName}</td>
-              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${student.middleName?.charAt(0) || ''}</td>
+              <td style="border: 0.25px solid #333; padding: 3px; font-size: 8px;">${student.firstName.toUpperCase()}</td>
+              <td style="border: 0.25px solid #333; padding: 3px; font-size: 8px;">${student.lastName.toUpperCase()}</td>
+              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${student.middleName?.[0]?.toUpperCase() || ""}</td>
           `
 
           // Add criteria data
@@ -1279,17 +1413,62 @@ export function EnhancedGradesSheet({
             pageContent += `<td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-size: 8px;">${we.toFixed(2)}</td>`
           })
 
+          // Handle special statuses
+          let finalGradeDisplay, remarksDisplay, remarksColor
+          if (studentStatusValue === 'INC') {
+            finalGradeDisplay = 'INC'
+            remarksDisplay = 'INC'
+            remarksColor = { bg: '#ffeaa7', text: '#856404' }
+          } else if (studentStatusValue === 'DROPPED') {
+            finalGradeDisplay = 'DROPPED'
+            remarksDisplay = 'DROPPED'
+            remarksColor = { bg: '#fab1a0', text: '#8b4513' }
+          } else {
+            finalGradeDisplay = roundToValidGrade(displayGrade).toFixed(2)
+            if (displayGrade >= 1.0 && displayGrade <= 3.0) {
+              remarksDisplay = 'PASSED'
+              remarksColor = { bg: '#d4edda', text: '#155724' }
+            } else {
+              remarksDisplay = 'FAILED'
+              remarksColor = { bg: '#f8d7da', text: '#721c24' }
+            }
+          }
+          
           pageContent += `
-              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-weight: bold; font-size: 8px;">${displayGrade.toFixed(2)}</td>
               <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-weight: bold; background: ${displayGrade >= 1.0 && displayGrade <= 3.0 ? '#d4edda' : '#f8d7da'}; color: ${displayGrade >= 1.0 && displayGrade <= 3.0 ? '#155724' : '#721c24'}; font-size: 8px;">
-                ${roundToValidGrade(displayGrade).toFixed(2)}
+                ${finalGradeDisplay}
               </td>
+              <td style="border: 0.25px solid #333; padding: 3px; text-align: center; font-weight: bold; background: ${remarksColor.bg}; color: ${remarksColor.text}; font-size: 8px;">${remarksDisplay}</td>
             </tr>
           `
         })
 
         pageContent += `
               </table>
+            </div>
+
+            <!-- Signature Section -->
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 24px;">
+                <!-- Instructor -->
+                <div style="text-align: center; width: 45%;">
+                  <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; height: 42px; width: 90%;"></div>
+                  <p style="margin: 0; font-size: 10px; font-weight: bold;">INSTRUCTOR</p>
+                  <p style="margin: 2px 0; font-size: 9px;">${classData.teacher.firstName} ${classData.teacher.lastName}</p>
+                </div>
+                <!-- Department Head (from class assignment) -->
+                <div style="text-align: center; width: 45%;">
+                  <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; height: 42px; width: 90%;"></div>
+                  <p style="margin: 0; font-size: 10px; font-weight: bold;">DEPARTMENT HEAD</p>
+                  <p style="margin: 2px 0; font-size: 9px;">${classData.departmentHead || departmentHeadGlobal || ''}</p>
+                </div>
+              </div>
+              <!-- VP for Academics (from class assignment/global setting) -->
+              <div style="text-align: center; margin-top: 6px;">
+                <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; width: 65%; height: 42px;"></div>
+                <p style="margin: 0; font-size: 10px; font-weight: bold;">VICE PRESIDENT FOR ACADEMICS</p>
+                <p style="margin: 2px 0; font-size: 9px;">${classData.vpAcademics || vpAcademicsGlobal || ''}</p>
+              </div>
             </div>
           </div>
         `
@@ -1510,16 +1689,19 @@ export function EnhancedGradesSheet({
           try {
             const finalGrade = calculateFinalGrade(enrollment.studentId)
             const remarks = getGradeDetails(finalGrade).label
-            
+            const studentStatusValue = studentStatus.get(enrollment.student.id) || 'NORMAL'
+
             console.log(`Saving grade for student ${enrollment.studentId}:`, {
               enrollmentId: enrollment.id,
               classId,
               studentId: enrollment.studentId,
               gradeTypeId: gradeType.id,
               finalGrade,
-              remarks
+              remarks,
+              status: studentStatusValue,
+              allComponentScores
             })
-            
+
             const response = await fetch('/api/real-save', {
               method: 'POST',
               headers: {
@@ -1528,24 +1710,25 @@ export function EnhancedGradesSheet({
               body: JSON.stringify({
                 enrollmentId: enrollment.id,
                 classId,
-                studentId: enrollment.studentId,
+                studentId: enrollment.student.id,
                 gradeTypeId: gradeType.id,
                 finalGrade,
                 remarks,
+                status: studentStatusValue,
                 allComponentScores
               })
             })
-            
+
             if (!response.ok) {
               const errorText = await response.text()
               console.error(`API Error for student ${enrollment.studentId}:`, errorText)
               errorCount++
               continue
             }
-            
+
             const result = await response.json()
             console.log(`Save result for student ${enrollment.studentId}:`, result)
-            
+
             if (result.success) {
               successCount++
             } else {
@@ -1956,7 +2139,7 @@ export function EnhancedGradesSheet({
           <Award className="h-5 w-5 text-primary" />
           <h4 className="font-bold text-lg">Grading Scale (1.0 - 5.0)</h4>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
             { grade: "1.0", range: "98-100%", label: "Excellent", icon: Trophy, color: "emerald" },
             { grade: "1.25", range: "95-97%", label: "Excellent", icon: Trophy, color: "emerald" },
@@ -1968,6 +2151,8 @@ export function EnhancedGradesSheet({
             { grade: "2.75", range: "77-79%", label: "Satisfactory", icon: Sparkles, color: "cyan" },
             { grade: "3.0", range: "75-76%", label: "Passing", icon: CheckCircle, color: "amber" },
             { grade: "5.0", range: "Below 75%", label: "Failed", icon: XCircle, color: "red" },
+            { grade: "INC", range: "Incomplete", label: "Incomplete", icon: Clock, color: "yellow" },
+            { grade: "DROPPED", range: "Dropped", label: "Dropped", icon: UserX, color: "orange" },
           ].map((item, i) => {
             const Icon = item.icon
             return (
@@ -2039,7 +2224,10 @@ export function EnhancedGradesSheet({
                         <Input
                           placeholder="e.g., Quiz 5, Activity 3"
                           value={newComponent.name}
-                          onChange={(e) => setNewComponent({ ...newComponent, name: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setNewComponent(prev => ({ ...prev, name: value }))
+                          }}
                         />
                       </div>
                       <div>
@@ -2048,7 +2236,11 @@ export function EnhancedGradesSheet({
                           type="number"
                           min="1"
                           value={newComponent.maxScore}
-                          onChange={(e) => setNewComponent({ ...newComponent, maxScore: parseInt(e.target.value) || 10 })}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            const numValue = value === '' ? 10 : parseFloat(value) || 10
+                            setNewComponent({ ...newComponent, maxScore: numValue })
+                          }}
                         />
                       </div>
                       <Button onClick={() => handleAddComponent(criterion.id)} className="w-full">
@@ -2084,19 +2276,22 @@ export function EnhancedGradesSheet({
 
       {/* Grade Entry Table */}
       <div className={`rounded-lg border overflow-x-auto shadow-sm ${isSubmissionDisabled ? 'pointer-events-none' : ''}`}>
-        <table className={`w-full border-collapse text-xs ${isSubmissionDisabled ? 'opacity-60' : ''}`}>
+        <table className={`w-full border-collapse text-xs min-w-max ${isSubmissionDisabled ? 'opacity-60' : ''}`}>
           <thead>
             <tr className="bg-primary text-primary-foreground">
-              <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[40px]">#</th>
-              <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[120px]">LASTNAME</th>
-              <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[120px]">FIRSTNAME</th>
-              <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[40px]">MI</th>
+              <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[30px]">#</th>
+              <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[80px]">LASTNAME</th>
+              <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[80px]">FIRSTNAME</th>
+              <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[30px]">MI</th>
+              <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[70px]">STATUS</th>
               {criteria.map(criterion => {
                 const comps = components.get(criterion.id) || []
+                const visibleComps = comps.filter(c => c.name && c.name.trim() !== "")
+                const colSpan = visibleComps.length + 3
                 return (
                   <th
                     key={criterion.id}
-                    colSpan={comps.length + 4}
+                    colSpan={colSpan}
                     className="border border-primary-foreground/20 p-2"
                   >
                     {criterion.name} ({criterion.percentage}%)
@@ -2104,48 +2299,53 @@ export function EnhancedGradesSheet({
                 )
               })}
               {gradeType && (
-                <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[100px] bg-blue-600">
+                <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[70px] bg-blue-600">
                   WEIGHTED<br/>CONTRIBUTION
-                  <div className="text-xs text-blue-100">({gradeType.percentage}%)</div>
+                  <div className="text-[9px] text-blue-100">({gradeType.percentage}%)</div>
                 </th>
               )}
               {isFinalGradeType && (
                 <>
-                  <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[100px]">
+                  <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[70px]">
                     TOTAL PERCENTAGE<br/>SCORE
                   </th>
-                  <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[100px]">
+                  <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[70px]">
                     {gradeType?.name?.toUpperCase() || "FINAL"}<br/>TERM GRADE
                   </th>
                 </>
               )}
               {/* Add FINAL TERM GRADE column for all grade types */}
-                  <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[100px] bg-gradient-to-br from-green-600 to-green-700 text-white">
+                  <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[70px] bg-gradient-to-br from-green-600 to-green-700 text-white">
                     {gradeType?.name?.toUpperCase() || "FINAL"}<br/>GRADE
-                    <div className="text-xs text-green-100">(1.0-5.0)</div>
+                    <div className="text-[9px] text-green-100">(1.0-5.0)</div>
                   </th>
-              <th rowSpan={2} className="border border-primary-foreground/20 p-2 min-w-[100px] bg-gradient-to-br from-green-600 to-green-700 text-white">
+              <th rowSpan={2} className="border border-primary-foreground/20 p-1 min-w-[70px] bg-gradient-to-br from-green-600 to-green-700 text-white">
                 REMARKS
-                <div className="text-xs text-green-100">(PASS/FAIL)</div>
+                <div className="text-[9px] text-green-100">(PASS/FAIL)</div>
               </th>
             </tr>
             <tr className="bg-primary text-primary-foreground">
+              {/* <td className="border border-primary-foreground/20 p-1"></td>
+              <td className="border border-primary-foreground/20 p-1"></td>
+              <td className="border border-primary-foreground/20 p-1"></td>
+              <td className="border border-primary-foreground/20 p-1"></td>
+              <td className="border border-primary-foreground/20 p-1"></td> */}
               {criteria.map(criterion => {
                 const comps = components.get(criterion.id) || []
+                const visibleComps = comps.filter(c => c.name && c.name.trim() !== "")
                 return (
                   <>
-                    {comps.map(comp => (
-                      <th key={comp.id} className="border border-primary-foreground/20 p-2 min-w-[60px]">
-                        <div className="text-center text-[10px]">
+                    {visibleComps.map(comp => (
+                      <th key={comp.id} className="border border-primary-foreground/20 p-1 min-w-[45px]">
+                        <div className="text-center text-[9px]">
                           <div className="font-semibold">{comp.name}</div>
                           <div className="text-primary-foreground/70">max:{comp.maxScore}</div>
                         </div>
                       </th>
                     ))}
-                    <th className="border border-primary-foreground/20 p-2 min-w-[60px] bg-primary/80">TOT</th>
-                    <th className="border border-primary-foreground/20 p-2 min-w-[50px] bg-primary/80">GE</th>
-                    <th className="border border-primary-foreground/20 p-2 min-w-[50px] bg-primary/80">WE</th>
-                    <th className="border-r-2 border-primary-foreground w-0"></th>
+                    <th className="border border-primary-foreground/20 p-1 min-w-[40px] bg-primary/80 text-[9px] text-center">TOT</th>
+                    <th className="border border-primary-foreground/20 p-1 min-w-[35px] bg-primary/80 text-[9px] text-center">GE</th>
+                    <th className="border border-primary-foreground/20 p-1 min-w-[35px] bg-primary/80 text-[9px] text-center">WE</th>
                   </>
                 )
               })}
@@ -2160,20 +2360,45 @@ export function EnhancedGradesSheet({
               const displayGrade = isFinalGradeType ? calculateOverallFinalGrade(student.id) : currentGrade
               const gradeDetails = getGradeDetails(displayGrade)
 
+              const studentStatusValue = studentStatus.get(student.id) || 'NORMAL'
+              const isHighlighted = studentStatusValue === 'INC' || studentStatusValue === 'DROPPED'
+              
               return (
-                <tr key={enrollment.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="border p-2 text-center font-medium">{index + 1}</td>
-                  <td className="border p-2 font-medium">{student.lastName}</td>
-                  <td className="border p-2">{student.firstName}</td>
-                  <td className="border p-2 text-center">{student.middleName?.[0] || ""}</td>
+                <tr key={enrollment.id} className={`hover:bg-muted/30 transition-colors ${isHighlighted ? 'bg-yellow-100 dark:bg-yellow-900/20' : ''}`}>
+                  <td className="border p-1 text-center font-medium">{index + 1}</td>
+                  <td className="border p-1 font-medium text-[10px]">{student.lastName.toUpperCase()}</td>
+                  <td className="border p-1 text-[10px]">{student.firstName.toUpperCase()}</td>
+                  <td className="border p-1 text-center">{student.middleName?.[0]?.toUpperCase() || ""}</td>
+                  <td className="border p-1 text-center">
+                    {!finalIsReadOnly ? (
+                      <select
+                        value={studentStatusValue}
+                        onChange={(e) => handleStatusChange(student.id, e.target.value as 'NORMAL' | 'INC' | 'DROPPED')}
+                        className="w-full text-[9px] border rounded px-1 py-0.5"
+                      >
+                        <option value="NORMAL">Normal</option>
+                        <option value="INC">INC</option>
+                        <option value="DROPPED">Dropped</option>
+                      </select>
+                    ) : (
+                      <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${
+                        studentStatusValue === 'INC' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                        studentStatusValue === 'DROPPED' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+                      }`}>
+                        {studentStatusValue === 'NORMAL' ? 'Normal' : studentStatusValue}
+                      </span>
+                    )}
+                  </td>
 
                   {criteria.map(criterion => {
                     const comps = components.get(criterion.id) || []
+                    const visibleComps = comps.filter(c => c.name && c.name.trim() !== "")
                     const { totalScore, maxScore, ge, we } = calculateCategoryGrade(student.id, criterion.id)
 
                     return (
                       <>
-                        {comps.map(comp => {
+                        {visibleComps.map(comp => {
                           const score = getStudentScore(student.id, comp.id)
                           const isInvalid = score !== null && score > comp.maxScore
                           const isEmpty = score === null
@@ -2190,7 +2415,7 @@ export function EnhancedGradesSheet({
                               <Input
                                 type="number"
                                 className={cn(
-                                  "h-7 text-xs text-center border-0 focus-visible:ring-1 bg-transparent",
+                                  "h-6 text-[9px] text-center border-0 focus-visible:ring-1 bg-transparent w-12",
                                   isInvalid && "text-red-600 dark:text-red-400 ring-1 ring-red-500",
                                   isEmpty && "border-red-300 dark:border-red-700",
                                   finalIsReadOnly && "bg-muted/50 cursor-not-allowed opacity-50"
@@ -2209,18 +2434,17 @@ export function EnhancedGradesSheet({
                             </td>
                           )
                         })}
-                        <td className="border p-2 text-center font-semibold bg-muted/50">{totalScore}</td>
-                        <td className="border p-2 text-center bg-muted/50">{ge.toFixed(1)}</td>
-                        <td className="border p-2 text-center bg-muted/50">{we.toFixed(2)}</td>
-                        <td className="border-r-2 border-border w-0"></td>
+                        <td className="border p-1 text-center font-semibold bg-muted/50 text-[9px]">{totalScore}</td>
+                        <td className="border p-1 text-center bg-muted/50 text-[9px]">{ge.toFixed(1)}</td>
+                        <td className="border p-1 text-center bg-muted/50 text-[9px]">{we.toFixed(2)}</td>
                       </>
                     )
                   })}
 
                   {gradeType && (
-                    <td className="border p-2 text-center font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                    <td className="border p-1 text-center font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[9px]">
                       <div className="flex items-center justify-center gap-1">
-                        <Calculator className="h-3 w-3" />
+                        <Calculator className="h-2 w-2" />
                         {calculateWeightedFinalGrade(student.id).toFixed(2)}
                       </div>
                     </td>
@@ -2228,34 +2452,50 @@ export function EnhancedGradesSheet({
                   {isFinalGradeType && (
                     <>
                       {/* TOTAL PERCENTAGE SCORE */}
-                      <td className="border p-2 text-center font-bold">
+                      <td className="border p-1 text-center font-bold text-[9px]">
                         {currentGrade.toFixed(2)}
                       </td>
                       {/* FINAL TERM GRADE */}
-                      <td className="border p-2 text-center font-bold">
+                      <td className="border p-1 text-center font-bold text-[9px]">
                         {currentGrade.toFixed(1)}
                       </td>
                     </>
                   )}
                   {/* FINAL TERM GRADE column for all grade types */}
                   <td className={cn(
-                    "border p-3 text-center font-bold shadow-lg transition-all duration-200 hover:shadow-xl",
-                    displayGrade >= 1.0 && displayGrade <= 3.0
-                      ? "bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700" 
-                      : "bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                    "border p-1 text-center font-bold text-[9px]",
+                    studentStatusValue === "INC"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : studentStatusValue === "DROPPED"
+                        ? "bg-orange-100 text-orange-800"
+                        : (displayGrade >= 1.0 && displayGrade <= 3.0
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800")
                   )}>
-           <span className="text-lg font-bold text-white">
-             {roundToValidGrade(displayGrade).toFixed(2)}
-           </span>
+                    {studentStatusValue === "INC"
+                      ? "INC"
+                      : studentStatusValue === "DROPPED"
+                        ? "DROPPED"
+                        : roundToValidGrade(displayGrade).toFixed(2)}
                   </td>
                   {/* REMARKS column for all grade types */}
                   <td className={cn(
-                    "border p-3 text-center font-bold",
-                    displayGrade >= 1.0 && displayGrade <= 3.0
-                      ? "bg-green-100 text-green-800" 
-                      : "bg-red-100 text-red-800"
+                    "border p-1 text-center font-bold text-[9px]",
+                    studentStatusValue === "INC"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : studentStatusValue === "DROPPED"
+                        ? "bg-orange-100 text-orange-800"
+                        : (displayGrade >= 1.0 && displayGrade <= 3.0
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800")
                   )}>
-                    {gradeDetails.label}
+                    {studentStatusValue === "INC"
+                      ? "INC"
+                      : studentStatusValue === "DROPPED"
+                        ? "DROPPED"
+                        : (displayGrade >= 1.0 && displayGrade <= 3.0
+                            ? "PASSED"
+                            : "FAILED")}
                   </td>
                 </tr>
               )
@@ -2263,6 +2503,56 @@ export function EnhancedGradesSheet({
           </tbody>
         </table>
       </div>
+
+      {/* INC & DROPPED Summary Table */}
+      {enrollments.some(enrollment => {
+        const studentId = enrollment.student.id
+        const status = studentStatus.get(studentId) || 'NORMAL'
+        return status === 'INC' || status === 'DROPPED'
+      }) && (
+        <div className="mt-8">
+          <h3 className="font-bold text-lg mb-2">INC & DROPPED Students</h3>
+          <div className="rounded-lg border overflow-x-auto">
+            <table className="w-full border-collapse text-xs min-w-max">
+              <thead>
+                <tr className="bg-red-100">
+                  <th className="border p-2">#</th>
+                  <th className="border p-2">LASTNAME</th>
+                  <th className="border p-2">FIRSTNAME</th>
+                  <th className="border p-2">MI</th>
+                  <th className="border p-2">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {enrollments
+                  .filter((enrollment) => {
+                    const studentId = enrollment.student.id
+                    const status = studentStatus.get(studentId) || 'NORMAL'
+                    return status === 'INC' || status === 'DROPPED'
+                  })
+                  .map((enrollment, i) => {
+                    const studentId = enrollment.student.id
+                    const status = studentStatus.get(studentId) || 'NORMAL'
+                    return (
+                      <tr
+                        key={studentId}
+                        className={status === 'INC' ? 'bg-yellow-50' : (status === 'DROPPED' ? 'bg-orange-50' : '')}
+                      >
+                        <td className="border p-2 text-center">{i + 1}</td>
+                        <td className="border p-2">{enrollment.student.lastName.toUpperCase()}</td>
+                        <td className="border p-2">{enrollment.student.firstName.toUpperCase()}</td>
+                        <td className="border p-2 text-center">{enrollment.student.middleName?.[0]?.toUpperCase() || ""}</td>
+                        <td className="border p-2 font-bold text-center">
+                          <span className={status === 'INC' ? 'text-yellow-800' : 'text-orange-800'}>{status}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       </div>
     </div>

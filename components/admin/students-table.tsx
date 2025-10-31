@@ -58,7 +58,6 @@ export function StudentsTable({ students, onApprove, onReject, showActions = tru
 
   // Test toast on component mount
   React.useEffect(() => {
-    console.log("StudentsTable component mounted, testing toast...")
     // Uncomment the line below to test if toast is working
     // toast({ title: "Test", description: "Toast system is working" })
   }, [])
@@ -162,7 +161,6 @@ export function StudentsTable({ students, onApprove, onReject, showActions = tru
 
   const handleDownloadDocument = (doc: any) => {
     try {
-      console.log("Downloading document:", doc)
       
       // Simple fallback content if document is empty or invalid
       if (!doc) {
@@ -495,8 +493,6 @@ In a real application, this would contain the actual document data.`
       
       if (response.ok) {
         const result = await response.json()
-        console.log("Approve response:", result)
-        console.log("Showing success toast for approval")
         toast({
           title: "✅ Success",
           description: "Student approved successfully!",
@@ -547,8 +543,6 @@ In a real application, this would contain the actual document data.`
       
       if (response.ok) {
         const result = await response.json()
-        console.log("Reject response:", result)
-        console.log("Showing success toast for deletion")
         toast({
           title: "✅ Student Removed",
           description: "Student registration has been permanently deleted from the system.",

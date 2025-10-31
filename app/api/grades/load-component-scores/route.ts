@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log("Loading component scores for classId:", classId, "gradeTypeId:", gradeTypeId)
 
     // Get all grades for this class and grade type
     const grades = await prisma.grade.findMany({
@@ -31,15 +30,11 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    console.log("Found grades:", grades.length)
     grades.forEach(grade => {
-      console.log(`Grade ${grade.id} has ${grade.componentScores.length} component scores`)
       grade.componentScores.forEach(score => {
-        console.log(`  - Component ${score.globalComponentDefId}: ${score.score}`)
       })
     })
 
-    console.log("Found grades with component scores:", grades.length)
 
     // Create a map of studentId -> componentId -> score
     const scoresMap = new Map()
@@ -55,7 +50,6 @@ export async function GET(request: NextRequest) {
       scoresMap.set(grade.studentId, Object.fromEntries(studentScores))
     })
 
-    console.log("Processed scores map:", Object.fromEntries(scoresMap))
 
     return NextResponse.json({
       success: true,

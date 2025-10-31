@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { submissionId, adminId, action, comments } = body
     
-    console.log("Grade approval request:", { submissionId, adminId, action, comments })
     
     // Validate required fields
     if (!submissionId || !adminId || !action) {

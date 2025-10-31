@@ -148,7 +148,6 @@ export function AddNewPlugin() {
     setDragActive(false)
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      console.log("File dropped:", e.dataTransfer.files[0])
     }
   }
 

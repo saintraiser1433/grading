@@ -3,24 +3,21 @@ import { prisma } from "@/lib/prisma"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("API route /api/grades/save called")
     
     const body = await request.json()
-    const { enrollmentId, classId, studentId, gradeTypeId, finalGrade, remarks } = body
+    const { enrollmentId, classId, studentId, gradeTypeId, finalGrade, remarks, status } = body
 
-    console.log("API route called with:", {
       enrollmentId,
       classId,
       studentId,
       gradeTypeId,
       finalGrade,
-      remarks
+      remarks,
+      status
     })
 
     // Test database connection first
-    console.log("Testing database connection...")
     await prisma.$connect()
-    console.log("Database connected successfully")
 
     // Check if grade already exists first
     const existingGrade = await prisma.grade.findFirst({
@@ -30,7 +27,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log("Existing grade found:", existingGrade)
 
     let grade
     if (existingGrade) {
@@ -40,9 +36,9 @@ export async function POST(request: NextRequest) {
         data: {
           grade: finalGrade,
           remarks,
+          status: status || 'NORMAL',
         },
       })
-      console.log("Grade updated:", grade)
     } else {
       // Create new grade
       grade = await prisma.grade.create({
@@ -53,12 +49,11 @@ export async function POST(request: NextRequest) {
           gradeTypeId,
           grade: finalGrade,
           remarks,
+          status: status || 'NORMAL',
         },
       })
-      console.log("Grade created:", grade)
     }
 
-    console.log("Grade operation completed successfully:", grade)
 
     // Verify the grade was actually saved by querying it back
     const verification = await prisma.grade.findFirst({
@@ -68,11 +63,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log("Verification query result:", verification)
 
     // Disconnect from database
     await prisma.$disconnect()
-    console.log("Database disconnected")
 
     return NextResponse.json({ success: true, data: grade })
   } catch (error) {

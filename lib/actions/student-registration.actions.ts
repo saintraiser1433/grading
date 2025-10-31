@@ -141,15 +141,12 @@ export async function getRejectedStudents() {
 
 export async function uploadEnrollmentDocument(data: CreateEnrollmentDocumentInput) {
   try {
-    console.log("uploadEnrollmentDocument called with data:", data)
     
     const validated = CreateEnrollmentDocumentSchema.parse(data)
-    console.log("Validation successful:", validated)
 
     const document = await prisma.enrollmentDocument.create({
       data: validated,
     })
-    console.log("Document created successfully:", document)
 
     revalidatePath("/student/documents")
     return { success: true, data: document }

@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { classId, teacherId, schoolYearId, gradeTypeId } = body
     
-    console.log("Grade submission request:", { classId, teacherId, schoolYearId, gradeTypeId })
     
     // Validate required fields
     if (!classId || !teacherId || !schoolYearId) {
@@ -93,7 +92,6 @@ export async function POST(request: NextRequest) {
       }
     })
     
-    console.log("Grade submission created:", submission)
     
     return NextResponse.json({
       success: true,

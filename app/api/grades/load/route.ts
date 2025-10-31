@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log("Loading grades for classId:", classId, "gradeTypeId:", gradeTypeId)
 
     // Get all enrollments for this class
     const enrollments = await prisma.enrollment.findMany({
@@ -24,7 +23,6 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    console.log("Found enrollments:", enrollments.length)
 
     // Get existing grades for this class and grade type
     const existingGrades = await prisma.grade.findMany({
@@ -38,7 +36,6 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    console.log("Found existing grades:", existingGrades.length)
 
     // Create a map of studentId -> grade data
     const gradesMap = new Map()
@@ -47,6 +44,7 @@ export async function GET(request: NextRequest) {
         id: grade.id,
         grade: grade.grade,
         remarks: grade.remarks,
+        status: grade.status,
         studentId: grade.studentId,
         enrollmentId: grade.enrollmentId
       })

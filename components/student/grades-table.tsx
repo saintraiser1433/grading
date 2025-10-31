@@ -36,18 +36,11 @@ export function GradesTable({ enrollments, availableGradeTypes = [] }: GradesTab
   
   // If no grade types found in data, use the provided available grade types
   if (gradeTypesArray.length === 0 && availableGradeTypes.length > 0) {
-    console.log("📋 Using available grade types from props:", availableGradeTypes)
     gradeTypesArray = availableGradeTypes
   }
   
   // If still no grade types found, show a helpful message
   if (gradeTypesArray.length === 0) {
-    console.log("⚠️ No grade types found in enrollment data or props")
-    console.log("This could mean:")
-    console.log("1. No grades have been submitted yet")
-    console.log("2. Grade types are named differently than expected")
-    console.log("3. There's a data loading issue")
-    console.log("4. No grade types have been configured in the system")
   }
 
   // Helper function to calculate overall grade

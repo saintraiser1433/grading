@@ -276,6 +276,7 @@ model Grade {
   gradeTypeId     String
   grade           Float?
   remarks         String?
+  status          StudentStatus    @default(NORMAL)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   componentScores ComponentScore[]
@@ -382,4 +383,10 @@ enum Semester {
   FIRST
   SECOND
   SUMMER
+}
+
+enum StudentStatus {
+  NORMAL
+  INC
+  DROPPED
 }

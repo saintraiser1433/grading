@@ -30,7 +30,6 @@ export default async function AdminStudentsPage() {
     try {
       const result = await approveStudent(studentId, session.user.id);
       if (result.success) {
-        console.log("Student approved successfully:", studentId);
       } else {
         console.error("Failed to approve student:", result.error);
       }
@@ -44,7 +43,6 @@ export default async function AdminStudentsPage() {
     try {
       const result = await rejectStudent(studentId, reason, session.user.id);
       if (result.success) {
-        console.log("Student rejected successfully:", studentId);
       } else {
         console.error("Failed to reject student:", result.error);
       }

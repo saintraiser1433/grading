@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log("Loading global components for gradeTypeId:", gradeTypeId)
 
     // Get global criteria for this grade type
     const globalCriteria = await prisma.globalGradingCriteria.findMany({
@@ -31,7 +30,6 @@ export async function GET(request: NextRequest) {
       orderBy: { order: 'asc' }
     })
 
-    console.log("Found global criteria:", globalCriteria.length)
 
     // Flatten all components
     const allComponents = []
@@ -47,7 +45,6 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    console.log("Found components:", allComponents.length)
 
     return NextResponse.json({
       success: true,
