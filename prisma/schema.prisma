@@ -89,6 +89,8 @@ model SchoolYear {
   gradeSubmissions GradeSubmission[]
   subjects         Subject[]
   subjectAssignments SubjectAssignment[]
+  gradeTypes       GradeType[]
+  globalCriteria   GlobalGradingCriteria[]
 
   @@unique([year, semester])
   @@index([isActive])
@@ -172,15 +174,18 @@ model GlobalGradingCriteria {
   name                 String
   percentage           Float
   gradeTypeId          String
+  schoolYearId         String?
   order                Int                         @default(0)
   isActive             Boolean                     @default(true)
   createdAt            DateTime                    @default(now())
   updatedAt            DateTime                    @updatedAt
   componentDefinitions GlobalComponentDefinition[]
   gradeType            GradeType                   @relation(fields: [gradeTypeId], references: [id], onDelete: Cascade)
+  schoolYear           SchoolYear?                 @relation(fields: [schoolYearId], references: [id], onDelete: SetNull)
 
   @@index([gradeTypeId])
   @@index([isActive])
+  @@index([schoolYearId])
 }
 
 model GradeType {
@@ -190,13 +195,16 @@ model GradeType {
   percentage       Float                   @default(0)
   order            Int                     @default(0)
   isActive         Boolean                 @default(true)
+  schoolYearId     String?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
   globalCriteria   GlobalGradingCriteria[]
   grades           Grade[]
   gradeSubmissions GradeSubmission[]
+  schoolYear       SchoolYear?             @relation(fields: [schoolYearId], references: [id], onDelete: SetNull)
 
   @@index([isActive])
+  @@index([schoolYearId])
 }
 
 model GlobalComponentDefinition {

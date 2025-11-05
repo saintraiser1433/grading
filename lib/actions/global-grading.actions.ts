@@ -11,6 +11,7 @@ const CreateGradeTypeSchema = z.object({
   percentage: z.number().min(0).max(100, "Percentage must be between 0 and 100"),
   order: z.number().int().min(0).default(0),
   isActive: z.boolean().optional(),
+  schoolYearId: z.string().optional(),
 })
 
 const CreateGlobalCriteriaSchema = z.object({
@@ -18,6 +19,7 @@ const CreateGlobalCriteriaSchema = z.object({
   percentage: z.number().min(0).max(100, "Percentage must be between 0 and 100"),
   gradeTypeId: z.string().min(1, "Grade type is required"),
   order: z.number().int().min(0).default(0),
+  schoolYearId: z.string().optional(),
 })
 
 const CreateGlobalComponentSchema = z.object({
@@ -36,8 +38,20 @@ export async function createGradeType(data: CreateGradeTypeInput) {
   try {
     const validated = CreateGradeTypeSchema.parse(data)
 
+    // If schoolYearId is not provided, use active school year
+    let schoolYearId = validated.schoolYearId
+    if (!schoolYearId) {
+      const activeSchoolYear = await prisma.schoolYear.findFirst({
+        where: { isActive: true },
+      })
+      schoolYearId = activeSchoolYear?.id || null
+    }
+
     const gradeType = await prisma.gradeType.create({
-      data: validated,
+      data: {
+        ...validated,
+        schoolYearId: schoolYearId || undefined,
+      },
     })
 
     revalidatePath("/admin/grading-criteria")
@@ -101,11 +115,31 @@ export async function createGlobalCriteria(data: CreateGlobalCriteriaInput) {
   try {
     const validated = CreateGlobalCriteriaSchema.parse(data)
 
+    // If schoolYearId is not provided, get it from the grade type or use active school year
+    let schoolYearId = validated.schoolYearId
+    if (!schoolYearId) {
+      // Try to get schoolYearId from the grade type
+      const gradeType = await prisma.gradeType.findUnique({
+        where: { id: validated.gradeTypeId },
+        select: { schoolYearId: true },
+      })
+      schoolYearId = gradeType?.schoolYearId || null
+      
+      // If still no schoolYearId, use active school year
+      if (!schoolYearId) {
+        const activeSchoolYear = await prisma.schoolYear.findFirst({
+          where: { isActive: true },
+        })
+        schoolYearId = activeSchoolYear?.id || null
+      }
+    }
+
     // Check if total percentage for this grade type would exceed 100%
     const existingCriteria = await prisma.globalGradingCriteria.findMany({
       where: { 
         gradeTypeId: validated.gradeTypeId,
-        isActive: true 
+        isActive: true,
+        ...(schoolYearId && { schoolYearId }),
       },
     })
 
@@ -120,7 +154,10 @@ export async function createGlobalCriteria(data: CreateGlobalCriteriaInput) {
     }
 
     const criteria = await prisma.globalGradingCriteria.create({
-      data: validated,
+      data: {
+        ...validated,
+        schoolYearId: schoolYearId || undefined,
+      },
     })
 
     revalidatePath("/admin/grading-criteria")

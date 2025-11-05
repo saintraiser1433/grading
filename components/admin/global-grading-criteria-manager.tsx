@@ -24,6 +24,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   createGradeType,
   updateGradeType,
   deleteGradeType,
@@ -44,9 +51,18 @@ interface GlobalGradingCriteriaManagerProps {
     gradeType: GradeType
     componentDefinitions: any[]
   })[]
+  schoolYears: SchoolYear[]
+  activeSchoolYear: SchoolYear | null
+  selectedSchoolYearId: string
 }
 
-export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: GlobalGradingCriteriaManagerProps) {
+export function GlobalGradingCriteriaManager({ 
+  gradeTypes, 
+  globalCriteria,
+  schoolYears,
+  activeSchoolYear,
+  selectedSchoolYearId
+}: GlobalGradingCriteriaManagerProps) {
   const [activeTab, setActiveTab] = useState("grade-types")
   const [open, setOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<any>(null)
@@ -54,11 +70,22 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
   const router = useRouter()
   const { toast } = useToast()
 
+  const handleSchoolYearChange = (schoolYearId: string) => {
+    const params = new URLSearchParams(window.location.search)
+    if (schoolYearId === "all") {
+      params.delete("schoolYearId")
+    } else {
+      params.set("schoolYearId", schoolYearId)
+    }
+    router.push(`/admin/grading-criteria?${params.toString()}`)
+  }
+
   const [gradeTypeForm, setGradeTypeForm] = useState({
     name: "",
     description: "",
     percentage: 0,
     order: 0,
+    schoolYearId: "",
   })
 
   const [criteriaForm, setCriteriaForm] = useState({
@@ -66,6 +93,7 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
     percentage: 0,
     gradeTypeId: "",
     order: 0,
+    schoolYearId: "",
   })
 
   const [componentForm, setComponentForm] = useState({
@@ -85,18 +113,25 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
   const handleOpenDialog = (type: string, item?: any) => {
     setEditingItem(item)
     
+    // Determine the school year to use: selected filter or active school year
+    const targetSchoolYearId = selectedSchoolYearId !== "all" 
+      ? selectedSchoolYearId 
+      : (activeSchoolYear?.id || "")
+    
     if (type === "grade-type") {
       if (item) {
         setGradeTypeForm({
           name: item.name,
           description: item.description || "",
           order: item.order,
+          schoolYearId: item.schoolYearId || targetSchoolYearId,
         })
       } else {
         setGradeTypeForm({
           name: "",
           description: "",
           order: gradeTypes.length,
+          schoolYearId: targetSchoolYearId,
         })
       }
     } else if (type === "criteria") {
@@ -106,6 +141,7 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
           percentage: item.percentage,
           gradeTypeId: item.gradeTypeId,
           order: item.order,
+          schoolYearId: item.schoolYearId || targetSchoolYearId,
         })
       } else {
         setCriteriaForm({
@@ -113,6 +149,7 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
           percentage: 0,
           gradeTypeId: gradeTypes[0]?.id || "",
           order: 0,
+          schoolYearId: targetSchoolYearId,
         })
       }
     } else if (type === "component") {
@@ -142,9 +179,26 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
 
     try {
       if (type === "grade-type") {
+        // Ensure schoolYearId is set: use form value, selected filter, or active school year
+        let targetSchoolYearId = gradeTypeForm.schoolYearId
+        if (!targetSchoolYearId || targetSchoolYearId === "") {
+          if (selectedSchoolYearId !== "all") {
+            targetSchoolYearId = selectedSchoolYearId
+          } else if (activeSchoolYear?.id) {
+            targetSchoolYearId = activeSchoolYear.id
+          } else {
+            targetSchoolYearId = ""
+          }
+        }
+        
+        const formData = {
+          ...gradeTypeForm,
+          schoolYearId: targetSchoolYearId || undefined,
+        }
+        
         const result = editingItem 
-          ? await updateGradeType(editingItem.id, gradeTypeForm)
-          : await createGradeType(gradeTypeForm)
+          ? await updateGradeType(editingItem.id, formData)
+          : await createGradeType(formData)
         
         if (result.success) {
           toast({
@@ -161,9 +215,26 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
           })
         }
       } else if (type === "criteria") {
+        // Ensure schoolYearId is set: use form value, selected filter, or active school year
+        let targetSchoolYearId = criteriaForm.schoolYearId
+        if (!targetSchoolYearId || targetSchoolYearId === "") {
+          if (selectedSchoolYearId !== "all") {
+            targetSchoolYearId = selectedSchoolYearId
+          } else if (activeSchoolYear?.id) {
+            targetSchoolYearId = activeSchoolYear.id
+          } else {
+            targetSchoolYearId = ""
+          }
+        }
+        
+        const formData = {
+          ...criteriaForm,
+          schoolYearId: targetSchoolYearId || undefined,
+        }
+        
         const result = editingItem 
-          ? await updateGlobalCriteria(editingItem.id, criteriaForm)
-          : await createGlobalCriteria(criteriaForm)
+          ? await updateGlobalCriteria(editingItem.id, formData)
+          : await createGlobalCriteria(formData)
         
         if (result.success) {
           toast({
@@ -273,6 +344,30 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
 
   return (
     <div className="space-y-6">
+      {/* School Year Filter */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <Label htmlFor="schoolYearFilter">Filter by School Year:</Label>
+          <Select
+            value={selectedSchoolYearId}
+            onValueChange={handleSchoolYearChange}
+          >
+            <SelectTrigger className="w-[250px]">
+              <SelectValue placeholder="Select school year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All School Years</SelectItem>
+              {schoolYears.map((sy) => (
+                <SelectItem key={sy.id} value={sy.id}>
+                  {sy.year} - {sy.semester}
+                  {sy.isActive && " (Active)"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="grade-types">Grade Types</TabsTrigger>
@@ -308,9 +403,9 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
                 <EmptyState
                   icon={BookOpen}
                   title="No Grade Types"
-                  description="Create your first grade type to get started with grading criteria management."
+                  description={`No grade types found for the selected school year. Create your first grade type to get started with grading criteria management.`}
                   action={
-                    <Button onClick={() => setOpen(true)}>
+                    <Button onClick={() => handleOpenDialog("grade-type")}>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Grade Type
                     </Button>
@@ -558,6 +653,31 @@ export function GlobalGradingCriteriaManager({ gradeTypes, globalCriteria }: Glo
                       value={gradeTypeForm.order}
                       onChange={(e) => setGradeTypeForm({ ...gradeTypeForm, order: parseInt(e.target.value) || 0 })}
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="schoolYear">School Year</Label>
+                    <Select
+                      value={gradeTypeForm.schoolYearId || "auto"}
+                      onValueChange={(value) => setGradeTypeForm({ ...gradeTypeForm, schoolYearId: value === "auto" ? "" : value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select school year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Use Active School Year (Auto)</SelectItem>
+                        {schoolYears.map((sy) => (
+                          <SelectItem key={sy.id} value={sy.id}>
+                            {sy.year} - {sy.semester}
+                            {sy.isActive && " (Active)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {selectedSchoolYearId !== "all" 
+                        ? `Currently filtered by: ${schoolYears.find(sy => sy.id === selectedSchoolYearId)?.year} - ${schoolYears.find(sy => sy.id === selectedSchoolYearId)?.semester}. New grade type will be assigned to this school year.`
+                        : "Will use active school year if 'Auto' is selected"}
+                    </p>
                   </div>
                 </>
               )}
