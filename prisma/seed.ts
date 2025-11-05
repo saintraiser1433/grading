@@ -160,174 +160,133 @@ async function main() {
   })
   console.log("✓ Created class:", `${classData.name} - Section ${classData.section}`)
 
-  // Enroll all 50 students
-  console.log("Enrolling 50 students in class...")
-  const enrollments = []
-  for (const student of students) {
-    const enrollment = await prisma.enrollment.upsert({
-      where: {
-        studentId_subjectId_schoolYearId: {
+  // Get all subjects assigned to teacher@git.edu
+  console.log("Finding all subjects assigned to teacher@git.edu...")
+  const subjectAssignments = await prisma.subjectAssignment.findMany({
+    where: {
+      teacherId: teacher.id,
+    },
+    include: {
+      subject: true,
+      schoolYear: true,
+    },
+  })
+
+  if (subjectAssignments.length === 0) {
+    console.log("⚠️  No subjects assigned to teacher@git.edu yet. Assigning subjects via admin panel first.")
+    console.log("   Enrolling students in the default subject (CS-THESIS-1)...")
+    
+    // Enroll all 50 students in the default subject
+    for (const student of students) {
+      // Check if enrollment already exists
+      const existingEnrollment = await prisma.enrollment.findFirst({
+        where: {
           studentId: student.id,
           subjectId: subject.id,
           schoolYearId: schoolYear.id,
         },
-      },
-      update: {},
-      create: {
-        studentId: student.id,
-        subjectId: subject.id,
-        classId: classData.id,
-        schoolYearId: schoolYear.id,
-        status: "PENDING",
-      },
-    })
-    enrollments.push(enrollment)
-  }
-  console.log("✓ Enrolled all 50 students!")
+      })
 
-  // Create Grading Criteria (Midterm)
-  console.log("Creating grading criteria...")
-  
-  const quizzesCriteria = await prisma.gradingCriteria.create({
-    data: {
-      classId: classData.id,
-      name: "QUIZZES",
-      percentage: 40,
-      isMidterm: true,
-      order: 0,
-    },
-  })
-
-  const classStandingCriteria = await prisma.gradingCriteria.create({
-    data: {
-      classId: classData.id,
-      name: "CLASS STANDING",
-      percentage: 20,
-      isMidterm: true,
-      order: 1,
-    },
-  })
-
-  const projectsCriteria = await prisma.gradingCriteria.create({
-    data: {
-      classId: classData.id,
-      name: "PROJECTS",
-      percentage: 10,
-      isMidterm: true,
-      order: 2,
-    },
-  })
-
-  const examCriteria = await prisma.gradingCriteria.create({
-    data: {
-      classId: classData.id,
-      name: "MAJOR EXAM",
-      percentage: 30,
-      isMidterm: true,
-      order: 3,
-    },
-  })
-
-  console.log("✓ Created grading criteria (100% total)")
-
-  // Create Grades for each student
-  console.log("Creating grades for 50 students...")
-  
-  for (let i = 0; i < students.length; i++) {
-    const student = students[i]
-    const enrollment = enrollments[i]
+      if (existingEnrollment) {
+        // Update existing enrollment
+        await prisma.enrollment.update({
+          where: { id: existingEnrollment.id },
+          data: {
+            classId: classData.id,
+            status: "APPROVED",
+          },
+        })
+      } else {
+        // Create new enrollment
+        await prisma.enrollment.create({
+          data: {
+            studentId: student.id,
+            subjectId: subject.id,
+            classId: classData.id,
+            schoolYearId: schoolYear.id,
+            status: "APPROVED",
+          },
+        })
+      }
+    }
+    console.log("✓ Enrolled all 50 students in CS-THESIS-1!")
+  } else {
+    console.log(`✓ Found ${subjectAssignments.length} subject assignment(s) for teacher@git.edu`)
     
-    // Vary the grades - some excellent, some good, some passing, some failing
-    let basePercentage
-    if (i < 10) {
-      basePercentage = randomScore(95, 100) // Excellent
-    } else if (i < 25) {
-      basePercentage = randomScore(85, 94) // Good to Very Good
-    } else if (i < 40) {
-      basePercentage = randomScore(75, 84) // Passing to Satisfactory
-    } else {
-      basePercentage = randomScore(60, 74) // Below passing
-    }
-
-    // Calculate scores for each category
-    const quizzesScore = randomScore(Math.floor(basePercentage * 0.36), 45) // Total of 4 quizzes (45 max)
-    const classStandingScore = randomScore(Math.floor(basePercentage * 0.36), 45) // Attendance + 2 activities (45 max)
-    const projectScore = randomScore(Math.floor(basePercentage * 0.40), 50) // 1 project (50 max)
-    const examScore = randomScore(Math.floor(basePercentage * 0.48), 60) // Exam (60 max)
-
-    // Calculate percentages
-    const quizzesPercentage = (quizzesScore / 45) * 100
-    const classStandingPercentage = (classStandingScore / 45) * 100
-    const projectPercentage = (projectScore / 50) * 100
-    const examPercentage = (examScore / 60) * 100
-
-    // Calculate grade equivalents
-    const quizzesGE = percentageToGrade(quizzesPercentage)
-    const classStandingGE = percentageToGrade(classStandingPercentage)
-    const projectGE = percentageToGrade(projectPercentage)
-    const examGE = percentageToGrade(examPercentage)
-
-    // Calculate weighted equivalents
-    const quizzesWE = quizzesGE * 0.40
-    const classStandingWE = classStandingGE * 0.20
-    const projectWE = projectGE * 0.10
-    const examWE = examGE * 0.30
-
-    // Calculate final midterm grade
-    const midtermGrade = Math.round((quizzesWE + classStandingWE + projectWE + examWE) * 4) / 4
-    const remarks = midtermGrade <= 3.0 ? "PASSED" : "FAILED"
-
-    // Get the midterm grade type
-    const midtermGradeType = await prisma.gradeType.findFirst({
-      where: { name: "Midterm" }
-    })
-
-    if (!midtermGradeType) {
-      console.log("❌ Midterm grade type not found, skipping grade creation")
-      continue
-    }
-
-    // Create or update grade record for midterm
-    const grade = await prisma.grade.upsert({
-      where: {
-        enrollmentId_gradeTypeId: {
-          enrollmentId: enrollment.id,
-          gradeTypeId: midtermGradeType.id,
+    // Enroll all 50 students in all assigned subjects
+    for (const assignment of subjectAssignments) {
+      const assignedSubject = assignment.subject
+      const assignedSchoolYear = assignment.schoolYear || schoolYear
+      
+      console.log(`  Enrolling 50 students in ${assignedSubject.code} (${assignedSubject.name})...`)
+      
+      // Find all classes for this subject and teacher in the assigned school year
+      const classes = await prisma.class.findMany({
+        where: {
+          subjectId: assignedSubject.id,
+          teacherId: teacher.id,
+          schoolYearId: assignedSchoolYear.id,
         },
-      },
-      update: {
-        grade: midtermGrade,
-        remarks: remarks,
-      },
-      create: {
-        enrollmentId: enrollment.id,
-        studentId: student.id,
-        classId: classData.id,
-        gradeTypeId: midtermGradeType.id,
-        grade: midtermGrade,
-        remarks: remarks,
-      },
-    })
+      })
+      
+      if (classes.length === 0) {
+        console.log(`    ⚠️  No classes found for ${assignedSubject.code}. Skipping enrollment.`)
+        continue
+      }
+      
+      // Enroll students in the first available class (or create enrollments without classId if needed)
+      const targetClass = classes[0]
+      
+      for (const student of students) {
+        // Check if enrollment already exists
+        const existingEnrollment = await prisma.enrollment.findFirst({
+          where: {
+            studentId: student.id,
+            subjectId: assignedSubject.id,
+            schoolYearId: assignedSchoolYear.id,
+          },
+        })
 
-    // Component scores are now managed through the global grading system
-    // Individual component scores are created when teachers enter grades
-
-    if ((i + 1) % 10 === 0) {
-      console.log(`  ✓ Created grades for ${i + 1} students...`)
+        if (existingEnrollment) {
+          // Update existing enrollment
+          await prisma.enrollment.update({
+            where: { id: existingEnrollment.id },
+            data: {
+              classId: targetClass.id,
+              status: "APPROVED",
+            },
+          })
+        } else {
+          // Create new enrollment
+          await prisma.enrollment.create({
+            data: {
+              studentId: student.id,
+              subjectId: assignedSubject.id,
+              classId: targetClass.id,
+              schoolYearId: assignedSchoolYear.id,
+              status: "APPROVED",
+            },
+          })
+        }
+      }
+      
+      console.log(`    ✓ Enrolled all 50 students in ${assignedSubject.code}!`)
     }
+    
+    console.log(`✓ Enrolled all 50 students in ${subjectAssignments.length} subject(s)!`)
   }
-
-  console.log("✓ All grades created!")
 
   console.log("\n✨ Seed completed successfully!")
   console.log("\n📊 Summary:")
   console.log("  • Admin: admin@git.edu (password: admin123)")
   console.log("  • Teacher: teacher@git.edu (password: teacher123)")
   console.log("  • 50 Students: student1@git.edu to student50@git.edu (password: student123)")
-  console.log("  • Class: BSCS 4 - Section A (CS THESIS 1)")
-  console.log("  • Grading: QUIZZES (40%) + CLASS STANDING (20%) + PROJECTS (10%) + MAJOR EXAM (30%)")
-  console.log("  • All 50 students enrolled with complete grades!")
-  console.log("\n🚀 Login as teacher@git.edu to see the grade sheet with 50 students!")
+  if (subjectAssignments.length > 0) {
+    console.log(`  • All 50 students enrolled in ${subjectAssignments.length} subject(s) assigned to teacher@git.edu!`)
+  } else {
+    console.log("  • All 50 students enrolled in CS-THESIS-1!")
+  }
+  console.log("\n🚀 Login as teacher@git.edu to see the enrolled students!")
 }
 
 main()

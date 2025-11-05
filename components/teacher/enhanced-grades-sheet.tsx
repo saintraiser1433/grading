@@ -1659,27 +1659,27 @@ export function EnhancedGradesSheet({
                 <!-- Instructor -->
                 <div style="text-align: center; width: 45%;">
                   <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; height: 42px; width: 90%;"></div>
-                  <p style="margin: 0; font-size: 10px; font-weight: bold;">INSTRUCTOR</p>
-                  <p style="margin: 2px 0; font-size: 9px;">${classData.teacher.firstName} ${classData.teacher.lastName}</p>
+                  <p style="margin: 0; font-size: 10px;">INSTRUCTOR</p>
+                  <p style="margin: 2px 0; font-size: 9px; font-weight: bold;">${classData.teacher.firstName} ${classData.teacher.lastName}</p>
                 </div>
                 <!-- Department Head (from class assignment) -->
                 <div style="text-align: center; width: 45%;">
                   <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; height: 42px; width: 90%;"></div>
-                  <p style="margin: 0; font-size: 10px; font-weight: bold;">DEPARTMENT HEAD</p>
-                  <p style="margin: 2px 0; font-size: 9px;">${classData.departmentHead || departmentHeadGlobal || ''}</p>
+                  <p style="margin: 0; font-size: 10px;">DEPARTMENT HEAD</p>
+                  <p style="margin: 2px 0; font-size: 9px; font-weight: bold;">${classData.departmentHead || departmentHeadGlobal || ''}</p>
                 </div>
               </div>
               <!-- VP for Academics (from class assignment/global setting) -->
               <div style="text-align: center; margin-top: 6px;">
                 <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; width: 65%; height: 42px;"></div>
-                <p style="margin: 0; font-size: 10px; font-weight: bold;">VICE PRESIDENT FOR ACADEMICS</p>
-                <p style="margin: 2px 0; font-size: 9px;">${vpAcademicsGlobal || classData.vpAcademics || ''}</p>
+                <p style="margin: 0; font-size: 10px;">VICE PRESIDENT FOR ACADEMICS</p>
+                <p style="margin: 2px 0; font-size: 9px; font-weight: bold;">${vpAcademicsGlobal || classData.vpAcademics || ''}</p>
               </div>
               <!-- Registrar (from global setting) -->
               <div style="text-align: center; margin-top: 6px;">
                 <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; width: 65%; height: 42px;"></div>
-                <p style="margin: 0; font-size: 10px; font-weight: bold;">REGISTRAR</p>
-                <p style="margin: 2px 0; font-size: 9px;">${registrarGlobal || ''}</p>
+                <p style="margin: 0; font-size: 10px;">REGISTRAR</p>
+                <p style="margin: 2px 0; font-size: 9px; font-weight: bold;">${registrarGlobal || ''}</p>
               </div>
             </div>
           `
