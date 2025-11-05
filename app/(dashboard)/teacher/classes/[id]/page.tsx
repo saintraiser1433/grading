@@ -2,9 +2,8 @@ import { getServerSession } from "next-auth"
 import { redirect, notFound } from "next/navigation"
 import { authOptions } from "@/lib/auth"
 import { getClassById } from "@/lib/actions/class.actions"
+import { getVpAcademics, getRegistrar } from "@/lib/actions/globalsettings.actions"
 import { prisma } from "@/lib/prisma"
-import { getVpAcademics } from "@/lib/actions/globalsettings.actions"
-import { getActiveDepartmentHeads } from "@/lib/actions/departmenthead.actions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, Users, ClipboardList } from "lucide-react"
@@ -36,8 +35,8 @@ export default async function ClassDetailPage({ params }: { params: { id: string
     redirect("/teacher/classes")
   }
 
-  // Fetch grading types, global criteria, and submission statuses
-  const [gradeTypes, globalCriteria, submissions, vpAcademicsGlobal, activeDepartmentHeads] = await Promise.all([
+  // Fetch grading types, global criteria, submission statuses, and global settings
+  const [gradeTypes, globalCriteria, submissions, vpAcademicsGlobal, registrarGlobal] = await Promise.all([
     prisma.gradeType.findMany({
       where: { isActive: true },
       orderBy: { order: "asc" },
@@ -69,7 +68,7 @@ export default async function ClassDetailPage({ params }: { params: { id: string
       },
     }),
     getVpAcademics(),
-    getActiveDepartmentHeads(),
+    getRegistrar(),
   ])
 
   // Create a map of gradeTypeId to submission status
@@ -94,9 +93,15 @@ export default async function ClassDetailPage({ params }: { params: { id: string
             {classData.subject.code} - {classData.subject.name}
           </h1>
           <p className="text-gray-500 mt-1">
-            {classData.name} • Section {classData.section}
+            {classData.name}{classData.section ? ` • Section ${classData.section}` : ""}
             {classData.isIrregular && " • Irregular"}
           </p>
+          {classData.dayAndTime && (
+            <p className="text-gray-600 mt-1">
+              {classData.dayAndTime}
+              {classData.room && ` • Room: ${classData.room}`}
+            </p>
+          )}
         </div>
       </div>
 
@@ -152,12 +157,17 @@ export default async function ClassDetailPage({ params }: { params: { id: string
           const submissionStatus = submissionInfo?.status || null
           const submissionId = submissionInfo?.id || undefined
 
+          // Filter enrollments to only include approved ones for the grading sheet
+          const approvedEnrollments = classData.enrollments.filter(
+            (enrollment) => enrollment.status === "APPROVED"
+          )
+
           return (
             <TabsContent key={gradeType.id} value={gradeType.id}>
               <EnhancedGradesSheet
                 classId={classData.id}
                 isMidterm={isMidterm}
-                enrollments={classData.enrollments}
+                enrollments={approvedEnrollments}
                 criteria={formattedCriteria}
                 classData={classData}
                 gradeType={gradeType}
@@ -165,9 +175,9 @@ export default async function ClassDetailPage({ params }: { params: { id: string
                 submissionStatus={submissionStatus}
                 submissionId={submissionId}
                 allSubmissionStatuses={submissionStatusMap}
+                vpAcademicsGlobal={vpAcademicsGlobal}
+                registrarGlobal={registrarGlobal}
                 showApprovalButtons={false}
-                vpAcademicsGlobal={typeof vpAcademicsGlobal === 'string' ? vpAcademicsGlobal : (vpAcademicsGlobal as any)?.data || undefined}
-                departmentHeadGlobal={(activeDepartmentHeads as any)?.data?.[0]?.name}
               />
             </TabsContent>
           )

@@ -118,7 +118,7 @@ export type UpdateComponentDefinitionInput = z.infer<typeof UpdateComponentDefin
 export const CreateEnrollmentSchema = z.object({
   studentId: z.string().min(1, "Student is required"),
   subjectId: z.string().min(1, "Subject is required"),
-  classId: z.string().optional(),
+  classId: z.string().min(1, "Class is required"),
   schoolYearId: z.string().min(1, "School year is required"),
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]).default("PENDING"),
 })

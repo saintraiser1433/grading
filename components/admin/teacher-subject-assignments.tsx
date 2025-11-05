@@ -93,10 +93,8 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
     section: "",
     name: "",
     dayAndTime: "",
-    room: "",
     classSize: undefined,
     departmentHead: "",
-    vpAcademics: "",
     isIrregular: false
   })
 
@@ -146,10 +144,8 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
         section: "",
         name: "",
         dayAndTime: "",
-        room: "",
         classSize: undefined,
         departmentHead: "",
-        vpAcademics: "",
         isIrregular: false
       })
       loadAssignments()
@@ -169,14 +165,12 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
       teacherId: assignment.teacherId,
       subjectId: assignment.subjectId,
       schoolYearId: assignment.schoolYearId,
-      section: assignment.section,
-      name: assignment.name,
-      dayAndTime: assignment.dayAndTime || "",
-      room: assignment.room || "",
-      classSize: assignment.classSize || undefined,
-      departmentHead: assignment.departmentHead || "",
-      vpAcademics: assignment.vpAcademics || "",
-      isIrregular: assignment.isIrregular
+        section: assignment.section,
+        name: assignment.name,
+        dayAndTime: assignment.dayAndTime || "",
+        classSize: assignment.classSize || undefined,
+        departmentHead: assignment.departmentHead || "",
+        isIrregular: assignment.isIrregular
     })
     setIsEditDialogOpen(true)
   }
@@ -363,17 +357,8 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
                     onChange={(e) => handleChange("dayAndTime", e.target.value)}
                     placeholder="e.g., TUE - THU (11:30 - 2:30 PM)"
                   />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="room">Room</Label>
-                  <Input
-                    id="room"
-                    value={formData.room}
-                    onChange={(e) => handleChange("room", e.target.value)}
-                    placeholder="e.g., C201"
-                  />
-                </div>
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -408,17 +393,8 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
                     onChange={(e) => handleChange("departmentHead", e.target.value)}
                     placeholder="Department head name"
                   />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vpAcademics">VP for Academics</Label>
-                  <Input
-                    id="vpAcademics"
-                    value={formData.vpAcademics}
-                    onChange={(e) => handleChange("vpAcademics", e.target.value)}
-                    placeholder="VP for Academics name"
-                  />
-                </div>
-              </div>
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -503,10 +479,9 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
                   {assignment.dayAndTime && (
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">{assignment.dayAndTime}</p>
-                        {assignment.room && <p className="text-xs text-muted-foreground">Room {assignment.room}</p>}
-                      </div>
+                        <div>
+                          <p className="text-sm font-medium">{assignment.dayAndTime}</p>
+                        </div>
                     </div>
                   )}
                   <div className="flex gap-2">
@@ -562,16 +537,8 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
                   value={formData.dayAndTime}
                   onChange={(e) => handleChange("dayAndTime", e.target.value)}
                 />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-room">Room</Label>
-                <Input
-                  id="edit-room"
-                  value={formData.room}
-                  onChange={(e) => handleChange("room", e.target.value)}
-                />
-              </div>
-            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -604,16 +571,8 @@ export function TeacherSubjectAssignments({ teachers, subjects, schoolYears }: T
                   value={formData.departmentHead}
                   onChange={(e) => handleChange("departmentHead", e.target.value)}
                 />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-vpAcademics">VP for Academics</Label>
-                <Input
-                  id="edit-vpAcademics"
-                  value={formData.vpAcademics}
-                  onChange={(e) => handleChange("vpAcademics", e.target.value)}
-                />
-              </div>
-            </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>

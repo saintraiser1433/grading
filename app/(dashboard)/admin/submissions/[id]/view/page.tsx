@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
+import { getVpAcademics, getRegistrar } from "@/lib/actions/globalsettings.actions"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -65,10 +66,11 @@ export default async function ViewSubmissionPage({ params }: ViewSubmissionPageP
     redirect("/admin/submissions")
   }
 
-  // Get enrollments for this class
+  // Get enrollments for this class - only approved enrollments should appear in grading sheet
   const enrollments = await prisma.enrollment.findMany({
     where: {
-      classId: submission.classId
+      classId: submission.classId,
+      status: "APPROVED"
     },
     include: {
       student: {
@@ -107,6 +109,12 @@ export default async function ViewSubmissionPage({ params }: ViewSubmissionPageP
     where: { isActive: true },
     orderBy: { order: 'asc' }
   })
+
+  // Fetch global settings
+  const [vpAcademicsGlobal, registrarGlobal] = await Promise.all([
+    getVpAcademics(),
+    getRegistrar(),
+  ])
 
   // Construct proper classData object with schoolYear included
   const classData = {
@@ -216,6 +224,8 @@ export default async function ViewSubmissionPage({ params }: ViewSubmissionPageP
             showApprovalButtons={false}
             submissionId={submission.id}
             adminId={session.user.id}
+            vpAcademicsGlobal={vpAcademicsGlobal}
+            registrarGlobal={registrarGlobal}
           />
         </CardContent>
       </Card>

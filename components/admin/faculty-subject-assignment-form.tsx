@@ -28,6 +28,16 @@ import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Trash2, User as UserIcon, BookOpen, Plus, X } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface FacultySubjectAssignmentFormProps {
   teachers: User[]
@@ -35,6 +45,26 @@ interface FacultySubjectAssignmentFormProps {
     assignedTeacher: User | null
     subjectAssignments: {
       teacher: User
+      schoolYearId: string | null
+    }[]
+    classes?: {
+      id: string
+      name: string
+      section: string
+      dayAndTime: string | null
+      teacherId: string
+      schoolYearId: string
+      teacher: {
+        id: string
+        firstName: string | null
+        lastName: string | null
+        email: string
+      }
+      schoolYear: {
+        id: string
+        year: string
+        semester: string
+      }
     }[]
   })[]
   schoolYears: SchoolYear[]
@@ -56,19 +86,28 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
     startDate: "",
     endDate: "",
     departmentHeadId: "",
-    vpAcademics: "HECTOR L. LAVILLES JR., Ph.D.Ed.",
-    courseSection: "",
-    dayTime: "",
-    size: "",
     schoolYearId: "",
     departmentId: "",
   })
+  // Array of schedules (course, section, dayTime, size)
+  const [schedules, setSchedules] = useState<Array<{
+    course: string
+    section: string
+    dayTime: string
+    size: string
+  }>>([{ course: "", section: "", dayTime: "", size: "" }])
+  const [selectedSchoolYearFilter, setSelectedSchoolYearFilter] = useState<string>("all")
+  const [deleteSubjectId, setDeleteSubjectId] = useState<string | null>(null)
 
-  // Get subjects assigned to the selected teacher (many-to-many)
+  // Get subjects assigned to the selected teacher (many-to-many), filtered by school year
   const teacherSubjects = selectedTeacher 
-    ? subjects.filter(subject => 
-        subject.subjectAssignments.some(assignment => assignment.teacher.id === selectedTeacher)
-      )
+    ? subjects.filter(subject => {
+        const hasAssignment = subject.subjectAssignments.some(assignment => 
+          assignment.teacher.id === selectedTeacher &&
+          (selectedSchoolYearFilter === "all" || assignment.schoolYearId === selectedSchoolYearFilter || subject.schoolYearId === selectedSchoolYearFilter)
+        )
+        return hasAssignment
+      })
     : []
   
   // Get subjects NOT assigned to the selected teacher
@@ -118,21 +157,46 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
       startDate: "",
       endDate: "",
       departmentHeadId: "",
-      vpAcademics: "HECTOR L. LAVILLES JR., Ph.D.Ed.",
-      courseSection: "",
-      dayTime: "",
-      size: "",
       schoolYearId: "",
       departmentId: "",
     })
+    // Reset schedules to one empty schedule
+    setSchedules([{ course: "", section: "", dayTime: "", size: "" }])
     setIsAssignDialogOpen(true)
   }
 
+  const addSchedule = () => {
+    setSchedules([...schedules, { course: "", section: "", dayTime: "", size: "" }])
+  }
+
+  const removeSchedule = (index: number) => {
+    if (schedules.length > 1) {
+      setSchedules(schedules.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateSchedule = (index: number, field: string, value: string) => {
+    const updated = [...schedules]
+    updated[index] = { ...updated[index], [field]: value }
+    setSchedules(updated)
+  }
+
   const handleAssignWithForm = async () => {
-    if (!assignmentForm.subjectId || !assignmentForm.teacherId) {
+    if (!assignmentForm.subjectId || !assignmentForm.teacherId || !assignmentForm.schoolYearId) {
       toast({
         title: "Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields (Subject, Teacher, and School Year)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate that at least one schedule has course and section
+    const validSchedules = schedules.filter(s => s.course.trim() && s.section.trim())
+    if (validSchedules.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one schedule with Course and Section",
         variant: "destructive",
       })
       return
@@ -140,12 +204,36 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
 
     setIsLoading(true)
 
-    const result = await assignSubjectToTeacherManyToMany(assignmentForm.subjectId, assignmentForm.teacherId)
+    // Create assignments for each schedule
+    let successCount = 0
+    let errorCount = 0
+    const errors: string[] = []
 
-    if (result.success) {
+    for (const schedule of validSchedules) {
+      const result = await assignSubjectToTeacherManyToMany(
+        assignmentForm.subjectId, 
+        assignmentForm.teacherId,
+        schedule.course,
+        schedule.section,
+        schedule.dayTime,
+        schedule.size,
+        assignmentForm.schoolYearId,
+        assignmentForm.departmentHeadId,
+        assignmentForm.departmentId
+      )
+
+      if (result.success) {
+        successCount++
+      } else {
+        errorCount++
+        errors.push(result.error || "Failed to assign schedule")
+      }
+    }
+
+    if (successCount > 0) {
       toast({
         title: "Success",
-        description: "Subject assigned to teacher successfully",
+        description: `Successfully assigned ${successCount} schedule(s)${errorCount > 0 ? `. ${errorCount} failed.` : ''}`,
       })
       setIsAssignDialogOpen(false)
       setSelectedSubject(null)
@@ -153,7 +241,7 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
     } else {
       toast({
         title: "Error",
-        description: result.error || "Failed to assign subject",
+        description: errors[0] || "Failed to assign subject",
         variant: "destructive",
       })
     }
@@ -163,6 +251,7 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
 
   const handleRemoveAssignment = async (subjectId: string) => {
     setIsLoading(true)
+    setDeleteSubjectId(null) // Close dialog
 
     const result = await removeSubjectFromTeacher(subjectId, selectedTeacher)
 
@@ -218,6 +307,28 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
             </p>
           </div>
 
+          {/* School Year Filter */}
+          <div className="space-y-2">
+            <Label htmlFor="schoolYearFilter">Filter by Academic Year</Label>
+            <Select
+              value={selectedSchoolYearFilter}
+              onValueChange={setSelectedSchoolYearFilter}
+              disabled={isLoading}
+            >
+              <SelectTrigger id="schoolYearFilter">
+                <SelectValue placeholder="Select academic year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Academic Years</SelectItem>
+                {schoolYears.map((sy) => (
+                  <SelectItem key={sy.id} value={sy.id}>
+                    {sy.year} - {sy.semester}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2">
             {/* Assigned Subjects */}
             <Card>
@@ -230,25 +341,60 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
               <CardContent>
                 {teacherSubjects.length > 0 ? (
                   <div className="space-y-2">
-                    {teacherSubjects.map((subject) => (
-                      <div
-                        key={subject.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div>
-                          <div className="font-medium">{subject.code}</div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">{subject.name}</div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRemoveAssignment(subject.id)}
-                          disabled={isLoading}
+                    {teacherSubjects.map((subject) => {
+                      // Find the class for this subject and teacher
+                      const assignment = subject.subjectAssignments.find(
+                        (a) => a.teacher.id === selectedTeacher &&
+                        (selectedSchoolYearFilter === "all" || a.schoolYearId === selectedSchoolYearFilter || subject.schoolYearId === selectedSchoolYearFilter)
+                      )
+                      
+                      // Find matching class for this assignment
+                      const matchingClass = subject.classes?.find(
+                        (cls) => cls.teacherId === selectedTeacher &&
+                        (assignment?.schoolYearId ? cls.schoolYearId === assignment.schoolYearId : true)
+                      )
+                      
+                      return (
+                        <div
+                          key={subject.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                          <div className="flex-1">
+                            <div className="font-medium">{subject.code} - {subject.name}</div>
+                            {matchingClass && (
+                              <div className="mt-1 space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
+                                <div>
+                                  <span className="font-medium">Course:</span> {matchingClass.name}
+                                  {matchingClass.section && ` • Section: ${matchingClass.section}`}
+                                </div>
+                                {matchingClass.dayAndTime && (
+                                  <div>
+                                    <span className="font-medium">Time:</span> {matchingClass.dayAndTime}
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="font-medium">Instructor:</span> {matchingClass.teacher.firstName} {matchingClass.teacher.lastName}
+                                </div>
+                              </div>
+                            )}
+                            {!matchingClass && (
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
+                                Class details not available
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeleteSubjectId(subject.id)}
+                            disabled={isLoading}
+                            className="ml-4"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
                   <p className="text-gray-500 dark:text-gray-400 text-center py-4">
@@ -357,57 +503,102 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
                                 </Select>
                               </div>
 
-                              {/* VP for Academics */}
-                              <div className="space-y-2">
-                                <Label htmlFor="vpAcademics">VP for Academics</Label>
-                                <Input
-                                  id="vpAcademics"
-                                  value={assignmentForm.vpAcademics}
-                                  readOnly
-                                  className="bg-gray-50 dark:bg-gray-800"
-                                />
-                              </div>
+                              {/* Schedules Section */}
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-base font-semibold">Schedules *</Label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={addSchedule}
+                                    disabled={isLoading}
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add Schedule
+                                  </Button>
+                                </div>
+                                <div className="space-y-4 border rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50">
+                                  {schedules.map((schedule, index) => (
+                                    <div key={index} className="space-y-3 border-b pb-4 last:border-b-0 last:pb-0">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <Label className="text-sm font-medium">Schedule {index + 1}</Label>
+                                        {schedules.length > 1 && (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => removeSchedule(index)}
+                                            disabled={isLoading}
+                                          >
+                                            <X className="h-4 w-4 text-red-500" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        {/* Course */}
+                                        <div className="space-y-2">
+                                          <Label htmlFor={`course-${index}`}>Course *</Label>
+                                          <Input
+                                            id={`course-${index}`}
+                                            placeholder="e.g., BSCS 4"
+                                            value={schedule.course}
+                                            onChange={(e) => updateSchedule(index, "course", e.target.value)}
+                                            disabled={isLoading}
+                                          />
+                                        </div>
 
-                              {/* Course & Section */}
-                              <div className="space-y-2">
-                                <Label htmlFor="courseSection">Course & Section</Label>
-                                <Input
-                                  id="courseSection"
-                                  placeholder="e.g., BSCS 4 - SECTION A"
-                                  value={assignmentForm.courseSection}
-                                  onChange={(e) => setAssignmentForm(prev => ({ ...prev, courseSection: e.target.value }))}
-                                />
-                              </div>
+                                        {/* Section */}
+                                        <div className="space-y-2">
+                                          <Label htmlFor={`section-${index}`}>Section *</Label>
+                                          <Input
+                                            id={`section-${index}`}
+                                            placeholder="e.g., A, B, C"
+                                            value={schedule.section}
+                                            onChange={(e) => updateSchedule(index, "section", e.target.value)}
+                                            disabled={isLoading}
+                                          />
+                                        </div>
+                                      </div>
 
-                              {/* Day & Time */}
-                              <div className="space-y-2">
-                                <Label htmlFor="dayTime">Day & Time</Label>
-                                <Input
-                                  id="dayTime"
-                                  placeholder="e.g., TUE - THU (11:30 - 2:30 PM | C201)"
-                                  value={assignmentForm.dayTime}
-                                  onChange={(e) => setAssignmentForm(prev => ({ ...prev, dayTime: e.target.value }))}
-                                />
-                              </div>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        {/* Day & Time */}
+                                        <div className="space-y-2">
+                                          <Label htmlFor={`dayTime-${index}`}>Day & Time</Label>
+                                          <Input
+                                            id={`dayTime-${index}`}
+                                            placeholder="e.g., TUE - THU (11:30 - 2:30 PM | C201)"
+                                            value={schedule.dayTime}
+                                            onChange={(e) => updateSchedule(index, "dayTime", e.target.value)}
+                                            disabled={isLoading}
+                                          />
+                                        </div>
 
-                              {/* Size */}
-                              <div className="space-y-2">
-                                <Label htmlFor="size">Size</Label>
-                                <Input
-                                  id="size"
-                                  type="number"
-                                  placeholder="e.g., 39"
-                                  value={assignmentForm.size}
-                                  onChange={(e) => setAssignmentForm(prev => ({ ...prev, size: e.target.value }))}
-                                />
+                                        {/* Size */}
+                                        <div className="space-y-2">
+                                          <Label htmlFor={`size-${index}`}>Size</Label>
+                                          <Input
+                                            id={`size-${index}`}
+                                            type="number"
+                                            placeholder="e.g., 39"
+                                            value={schedule.size}
+                                            onChange={(e) => updateSchedule(index, "size", e.target.value)}
+                                            disabled={isLoading}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
 
                               {/* School Year */}
                               <div className="space-y-2">
-                                <Label htmlFor="schoolYear">School Year</Label>
+                                <Label htmlFor="schoolYear">School Year *</Label>
                                 <Select
                                   value={assignmentForm.schoolYearId}
                                   onValueChange={(value) => setAssignmentForm(prev => ({ ...prev, schoolYearId: value }))}
+                                  required
                                 >
                                   <SelectTrigger>
                                     <SelectValue placeholder="Select school year" />
@@ -536,6 +727,39 @@ export function FacultySubjectAssignmentForm({ teachers, subjects, schoolYears, 
           </Badge>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteSubjectId !== null} onOpenChange={() => setDeleteSubjectId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              Remove Subject Assignment
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this subject assignment? This action will:
+              <br /><br />
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                • Remove the subject assignment from the teacher
+                <br />
+                • Delete all associated classes (if no students are enrolled)
+                <br />
+                • This action cannot be undone
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteSubjectId && handleRemoveAssignment(deleteSubjectId)}
+              disabled={isLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isLoading ? "Removing..." : "Remove Assignment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

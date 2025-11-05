@@ -42,8 +42,13 @@ export default async function TeacherClassesPage() {
                 <CardContent>
                   <div className="space-y-2 text-sm">
                     <p className="font-medium">
-                      {classItem.name} • Section {classItem.section}
+                      {classItem.name}{classItem.section ? ` • Section ${classItem.section}` : ""}
                     </p>
+                    {classItem.dayAndTime && (
+                      <p className="text-gray-600 dark:text-gray-400">
+                        {classItem.dayAndTime}
+                      </p>
+                    )}
                     {classItem.isIrregular && (
                       <p className="text-orange-600">Irregular Section</p>
                     )}

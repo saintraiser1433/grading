@@ -34,6 +34,13 @@ export default async function EnrollPage() {
     (e) => e.schoolYearId === activeSchoolYear?.id
   )
   const availableSubjects = subjects.filter((s) => !enrolledSubjectIds.has(s.id))
+  
+  // Get enrolled class IDs for the active school year
+  const enrolledClassIds = new Set(
+    currentEnrollments
+      .filter(e => e.classId)
+      .map(e => e.classId!)
+  )
 
   return (
     <div className="space-y-6">
@@ -172,6 +179,7 @@ export default async function EnrollPage() {
                       subjects={availableSubjects}
                       studentId={session.user.id}
                       schoolYearId={activeSchoolYear.id}
+                      enrolledClassIds={enrolledClassIds}
                     />
                   )}
                 </CardContent>

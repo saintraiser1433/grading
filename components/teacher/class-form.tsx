@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Subject, SchoolYear } from "@prisma/client"
 import { Button } from "@/components/ui/button"
@@ -22,9 +22,10 @@ interface ClassFormProps {
   subjects: Subject[]
   schoolYears: SchoolYear[]
   teacherId: string
+  initialSubjectId?: string
 }
 
-export function ClassForm({ subjects, schoolYears, teacherId }: ClassFormProps) {
+export function ClassForm({ subjects, schoolYears, teacherId, initialSubjectId }: ClassFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
@@ -32,9 +33,16 @@ export function ClassForm({ subjects, schoolYears, teacherId }: ClassFormProps) 
     name: "",
     section: "",
     isIrregular: false,
-    subjectId: "",
-    schoolYearId: "",
+    subjectId: initialSubjectId || "",
+    schoolYearId: schoolYears.find(sy => sy.isActive)?.id || "",
   })
+
+  // Update subjectId when initialSubjectId changes
+  useEffect(() => {
+    if (initialSubjectId) {
+      setFormData(prev => ({ ...prev, subjectId: initialSubjectId }))
+    }
+  }, [initialSubjectId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

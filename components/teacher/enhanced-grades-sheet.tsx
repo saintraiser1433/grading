@@ -89,6 +89,7 @@ interface GradesSheetProps {
   allSubmissionStatuses?: Map<string, { status: 'PENDING' | 'APPROVED' | 'DECLINED', id: string }>
   vpAcademicsGlobal?: string
   departmentHeadGlobal?: string
+  registrarGlobal?: string
   showApprovalButtons?: boolean
 }
 
@@ -191,11 +192,17 @@ export function EnhancedGradesSheet({
   submissionStatus = null,
   allSubmissionStatuses = new Map(),
   vpAcademicsGlobal,
-  departmentHeadGlobal
+  departmentHeadGlobal,
+  registrarGlobal
 }: GradesSheetProps) {
+  // Filter to only include approved enrollments (safety check)
+  const approvedEnrollments = enrollments.filter(
+    (enrollment) => enrollment.status === "APPROVED"
+  )
+  
   // Sort enrollments by last name in ascending order
   const sortedEnrollments = useMemo(() => {
-    return [...enrollments].sort((a, b) => {
+    return [...approvedEnrollments].sort((a, b) => {
       const lastNameA = (a.student.lastName || '').toLowerCase().trim()
       const lastNameB = (b.student.lastName || '').toLowerCase().trim()
       if (lastNameA < lastNameB) return -1
@@ -207,7 +214,7 @@ export function EnhancedGradesSheet({
       if (firstNameA > firstNameB) return 1
       return 0
     })
-  }, [enrollments])
+  }, [approvedEnrollments])
   const [components, setComponents] = useState<Map<string, Component[]>>(new Map())
   const [studentScores, setStudentScores] = useState<Map<string, Map<string, number>>>(new Map())
   const [existingGrades, setExistingGrades] = useState<Map<string, any>>(new Map())
@@ -427,14 +434,15 @@ export function EnhancedGradesSheet({
       loadAllGrades()
       loadClassComponents()
     }
-  }, [gradeType?.id, classId])
+  }, [classId])
 
-  // Load global component definitions for the current grade type
+  // Load class-specific component definitions
   const loadClassComponents = async () => {
-    if (!classId || !gradeType?.id) return
+    if (!classId) return
     
     try {
-      const response = await fetch(`/api/grades/global-components?gradeTypeId=${gradeType.id}`)
+      // Add cache-busting parameter to ensure fresh data
+      const response = await fetch(`/api/grades/class-components?classId=${classId}&t=${Date.now()}`)
       const result = await response.json()
       
       if (result.success) {
@@ -454,13 +462,18 @@ export function EnhancedGradesSheet({
         })
         
         setComponents(componentsByCriteria)
-        console.log("✅ Global components loaded successfully!")
-        console.log("📋 Components by criteria:", componentsByCriteria)
+        console.log("✅ Components loaded successfully!")
+        console.log("📋 Total components:", result.components.length)
+        console.log("📋 Components by criteria:", Array.from(componentsByCriteria.entries()).map(([id, comps]) => ({
+          criteriaId: id,
+          count: comps.length,
+          names: comps.map(c => c.name)
+        })))
       } else {
-        console.error("Failed to load global components:", result.error)
+        console.error("Failed to load components:", result.error)
       }
     } catch (error) {
-      console.error("Error loading global components:", error)
+      console.error("Error loading components:", error)
     }
   }
 
@@ -703,7 +716,7 @@ export function EnhancedGradesSheet({
     }
 
     try {
-      const response = await fetch('/api/grades/global-components', {
+      const response = await fetch('/api/grades/class-components', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -719,8 +732,34 @@ export function EnhancedGradesSheet({
       const result = await response.json()
 
       if (result.success) {
-        // Reload components from database
-        await loadClassComponents()
+        // Add the new component directly to state for immediate UI update
+        if (result.data) {
+          const newComp: Component = {
+            id: result.data.id,
+            name: result.data.name,
+            maxScore: result.data.maxScore,
+            criteriaId: criteriaId
+          }
+          
+          setComponents(prev => {
+            const updated = new Map(prev)
+            if (!updated.has(criteriaId)) {
+              updated.set(criteriaId, [])
+            }
+            const existing = updated.get(criteriaId) || []
+            // Check if component already exists to avoid duplicates
+            if (!existing.find(c => c.id === newComp.id)) {
+              updated.set(criteriaId, [...existing, newComp])
+            }
+            return updated
+          })
+        }
+        
+        // Also reload components from database to ensure consistency
+        // Use a small delay to allow the database to commit
+        setTimeout(async () => {
+          await loadClassComponents()
+        }, 300)
         
         setAddComponentDialog(null)
         setNewComponent({ name: "", maxScore: 10 })
@@ -750,7 +789,7 @@ export function EnhancedGradesSheet({
     if (!confirm("Remove this component?")) return
 
     try {
-      const response = await fetch(`/api/grades/global-components?componentId=${componentId}`, {
+      const response = await fetch(`/api/grades/class-components?componentId=${componentId}`, {
         method: 'DELETE'
       })
 
@@ -783,7 +822,7 @@ export function EnhancedGradesSheet({
 
 
   const handleExport = async (format: 'csv' | 'excel') => {
-    if (!gradeType || !enrollments.length) {
+    if (!gradeType || !approvedEnrollments.length) {
       toast({
         title: "Error",
         description: "No grade type or students selected",
@@ -1044,7 +1083,7 @@ export function EnhancedGradesSheet({
   }
 
   const handleExportPDF = async () => {
-    if (!gradeType || !enrollments.length) {
+    if (!gradeType || !approvedEnrollments.length) {
       toast({
         title: "Error",
         description: "No grade type or students selected",
@@ -1162,7 +1201,7 @@ export function EnhancedGradesSheet({
             </div>
             <div>
               <p style="margin: 1px 0;"><strong>Section:</strong> ${classData.subject.code} - ${classData.name}</p>
-              <p style="margin: 1px 0;"><strong>Students:</strong> ${enrollments.length}</p>
+              <p style="margin: 1px 0;"><strong>Students:</strong> ${sortedEnrollments.length}</p>
             </div>
           </div>
 
@@ -1340,9 +1379,43 @@ export function EnhancedGradesSheet({
       const pdfWidth = pdf.internal.pageSize.getWidth()
       const pdfHeight = pdf.internal.pageSize.getHeight()
       
+      // Calculate statistics once (for last page only)
+      let droppedCountPDF = 0
+      let incCountPDF = 0
+      let passedCountPDF = 0
+      let failedCountPDF = 0
+
+      sortedEnrollments.forEach(enrollment => {
+        const studentId = enrollment.student.id
+        const studentStatusValue = studentStatus.get(studentId) || 'NORMAL'
+        
+        if (studentStatusValue === 'DROPPED') {
+          droppedCountPDF++
+        } else if (studentStatusValue === 'INC') {
+          incCountPDF++
+        } else {
+          const currentGrade = calculateFinalGrade(studentId)
+          const overallGrade = calculateOverallFinalGrade(studentId)
+          const displayGrade = isFinalGradeType ? overallGrade : currentGrade
+          
+          if (displayGrade >= 1.0 && displayGrade <= 3.0) {
+            passedCountPDF++
+          } else {
+            failedCountPDF++
+          }
+        }
+      })
+
+      const totalStudentsPDF = sortedEnrollments.length
+      const droppedPercentagePDF = totalStudentsPDF > 0 ? ((droppedCountPDF / totalStudentsPDF) * 100).toFixed(2) : '0.00'
+      const incPercentagePDF = totalStudentsPDF > 0 ? ((incCountPDF / totalStudentsPDF) * 100).toFixed(2) : '0.00'
+      const passedPercentagePDF = totalStudentsPDF > 0 ? ((passedCountPDF / totalStudentsPDF) * 100).toFixed(2) : '0.00'
+      const failedPercentagePDF = totalStudentsPDF > 0 ? ((failedCountPDF / totalStudentsPDF) * 100).toFixed(2) : '0.00'
+      
       // Create separate pages for each group of 30 students
       
       for (let page = 0; page < totalPages; page++) {
+        const isLastPage = page === totalPages - 1
         if (page > 0) {
           pdf.addPage()
         }
@@ -1378,7 +1451,7 @@ export function EnhancedGradesSheet({
               </div>
               <div>
                 <p style="margin: 1px 0;"><strong>Section:</strong> ${classData.subject.code} - ${classData.name}</p>
-                <p style="margin: 1px 0;"><strong>Students:</strong> ${enrollments.length}</p>
+                <p style="margin: 1px 0;"><strong>Students:</strong> ${sortedEnrollments.length}</p>
               </div>
             </div>
 
@@ -1545,6 +1618,40 @@ export function EnhancedGradesSheet({
         pageContent += `
               </table>
             </div>
+        `
+
+        // Only add statistics and signature section on the last page
+        if (isLastPage) {
+          pageContent += `
+            <!-- Statistics Summary -->
+            <div style="margin-top: 20px; padding: 15px; border: 1px solid #333; background: #f0f4ff; border-radius: 5px;">
+              <h3 style="text-align: center; font-weight: bold; font-size: ${baseFontSize + 2}px; margin-bottom: 12px;">CLASS STATISTICS SUMMARY</h3>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px;">
+                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #ff9800; border-radius: 5px;">
+                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #e65100;">${droppedCountPDF}</div>
+                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">Dropped</div>
+                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #ff9800; margin-top: 4px;">${droppedPercentagePDF}%</div>
+                </div>
+                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #ffc107; border-radius: 5px;">
+                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #f57c00;">${incCountPDF}</div>
+                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">INC</div>
+                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #ffc107; margin-top: 4px;">${incPercentagePDF}%</div>
+                </div>
+                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #4caf50; border-radius: 5px;">
+                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #2e7d32;">${passedCountPDF}</div>
+                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">Passed</div>
+                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #4caf50; margin-top: 4px;">${passedPercentagePDF}%</div>
+                </div>
+                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #f44336; border-radius: 5px;">
+                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #c62828;">${failedCountPDF}</div>
+                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">Failed</div>
+                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #f44336; margin-top: 4px;">${failedPercentagePDF}%</div>
+                </div>
+              </div>
+              <div style="text-align: center; margin-top: 8px; font-size: ${baseFontSize}px; color: #666;">
+                Total Students: <span style="font-weight: bold;">${totalStudentsPDF}</span>
+              </div>
+            </div>
 
             <!-- Signature Section -->
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc;">
@@ -1566,9 +1673,20 @@ export function EnhancedGradesSheet({
               <div style="text-align: center; margin-top: 6px;">
                 <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; width: 65%; height: 42px;"></div>
                 <p style="margin: 0; font-size: 10px; font-weight: bold;">VICE PRESIDENT FOR ACADEMICS</p>
-                <p style="margin: 2px 0; font-size: 9px;">${classData.vpAcademics || vpAcademicsGlobal || ''}</p>
+                <p style="margin: 2px 0; font-size: 9px;">${vpAcademicsGlobal || classData.vpAcademics || ''}</p>
+              </div>
+              <!-- Registrar (from global setting) -->
+              <div style="text-align: center; margin-top: 6px;">
+                <div style="border-bottom: 1px solid #333; margin: 0 auto 6px auto; width: 65%; height: 42px;"></div>
+                <p style="margin: 0; font-size: 10px; font-weight: bold;">REGISTRAR</p>
+                <p style="margin: 2px 0; font-size: 9px;">${registrarGlobal || ''}</p>
               </div>
             </div>
+          `
+        }
+
+        // Close the main div
+        pageContent += `
           </div>
         `
 
@@ -1724,8 +1842,8 @@ export function EnhancedGradesSheet({
       }
       
       // Save grades for all students
-      if (enrollments.length > 0) {
-        console.log("Saving grades for all students:", enrollments.length)
+      if (sortedEnrollments.length > 0) {
+        console.log("Saving grades for all students:", sortedEnrollments.length)
         
         // Test API connectivity first
         console.log("Testing API connectivity...")
@@ -1917,7 +2035,7 @@ export function EnhancedGradesSheet({
         } else {
           toast({
             title: "❌ Save Failed",
-            description: `Failed to save grades for all ${enrollments.length} students`,
+            description: `Failed to save grades for all ${sortedEnrollments.length} students`,
             variant: "destructive",
           })
         }
@@ -2056,7 +2174,7 @@ export function EnhancedGradesSheet({
     )
   }
 
-  if (enrollments.length === 0) {
+  if (sortedEnrollments.length === 0) {
     return (
       <Alert>
         <AlertCircle className="h-4 w-4" />
@@ -2281,7 +2399,7 @@ export function EnhancedGradesSheet({
           </div>
           <div className="space-y-1">
             <p><strong>Section:</strong> {classData.name || 'N/A'} - {classData.section || 'N/A'}</p>
-            <p><strong>Students:</strong> {enrollments.length}</p>
+            <p><strong>Students:</strong> {sortedEnrollments.length}</p>
           </div>
         </div>
       </div>
@@ -2656,6 +2774,72 @@ export function EnhancedGradesSheet({
           </tbody>
         </table>
       </div>
+
+      {/* Statistics Summary */}
+      {(() => {
+        const totalStudents = sortedEnrollments.length
+        let droppedCount = 0
+        let incCount = 0
+        let passedCount = 0
+        let failedCount = 0
+
+        sortedEnrollments.forEach(enrollment => {
+          const studentId = enrollment.student.id
+          const studentStatusValue = studentStatus.get(studentId) || 'NORMAL'
+          
+          if (studentStatusValue === 'DROPPED') {
+            droppedCount++
+          } else if (studentStatusValue === 'INC') {
+            incCount++
+          } else {
+            const currentGrade = calculateFinalGrade(studentId)
+            const overallGrade = calculateOverallFinalGrade(studentId)
+            const displayGrade = isFinalGradeType ? overallGrade : currentGrade
+            
+            if (displayGrade >= 1.0 && displayGrade <= 3.0) {
+              passedCount++
+            } else {
+              failedCount++
+            }
+          }
+        })
+
+        const droppedPercentage = totalStudents > 0 ? ((droppedCount / totalStudents) * 100).toFixed(2) : '0.00'
+        const incPercentage = totalStudents > 0 ? ((incCount / totalStudents) * 100).toFixed(2) : '0.00'
+        const passedPercentage = totalStudents > 0 ? ((passedCount / totalStudents) * 100).toFixed(2) : '0.00'
+        const failedPercentage = totalStudents > 0 ? ((failedCount / totalStudents) * 100).toFixed(2) : '0.00'
+
+        return (
+          <div className="mt-6 rounded-lg border bg-gradient-to-br from-blue-50 to-indigo-50 p-4 shadow-sm">
+            <h3 className="font-bold text-lg mb-4 text-center">Class Statistics Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 rounded-lg bg-white border-2 border-orange-300">
+                <div className="text-2xl font-bold text-orange-700">{droppedCount}</div>
+                <div className="text-sm text-gray-600">Dropped</div>
+                <div className="text-xs font-semibold text-orange-600 mt-1">{droppedPercentage}%</div>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-white border-2 border-yellow-300">
+                <div className="text-2xl font-bold text-yellow-700">{incCount}</div>
+                <div className="text-sm text-gray-600">INC</div>
+                <div className="text-xs font-semibold text-yellow-600 mt-1">{incPercentage}%</div>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-white border-2 border-green-300">
+                <div className="text-2xl font-bold text-green-700">{passedCount}</div>
+                <div className="text-sm text-gray-600">Passed</div>
+                <div className="text-xs font-semibold text-green-600 mt-1">{passedPercentage}%</div>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-white border-2 border-red-300">
+                <div className="text-2xl font-bold text-red-700">{failedCount}</div>
+                <div className="text-sm text-gray-600">Failed</div>
+                <div className="text-xs font-semibold text-red-600 mt-1">{failedPercentage}%</div>
+              </div>
+            </div>
+            <div className="text-center mt-3 text-sm text-gray-600">
+              Total Students: <span className="font-bold">{totalStudents}</span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* INC & DROPPED Summary Table */}
       {enrollments.some(enrollment => {

@@ -19,7 +19,6 @@ import {
   ChevronDown,
   Percent,
   Building2,
-  Award,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -41,7 +40,6 @@ const adminNavigation = [
   { name: "Faculty", href: "/admin/faculty", icon: Users },
   { name: "Subjects", href: "/admin/subjects", icon: BookOpen },
   { name: "School Years", href: "/admin/school-years", icon: Calendar },
-  { name: "Grade Types", href: "/admin/grade-types", icon: Award },
   { name: "Grading Criteria", href: "/admin/grading-criteria", icon: Percent },
   { name: "Grade Submissions", href: "/admin/submissions", icon: FileCheck },
   { name: "Departments", href: "/admin/departments", icon: Building2 },

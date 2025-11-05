@@ -88,6 +88,7 @@ model SchoolYear {
   enrollments      Enrollment[]
   gradeSubmissions GradeSubmission[]
   subjects         Subject[]
+  subjectAssignments SubjectAssignment[]
 
   @@unique([year, semester])
   @@index([isActive])
@@ -120,18 +121,21 @@ model Subject {
 }
 
 model SubjectAssignment {
-  id        String   @id @default(cuid())
-  subjectId String
-  teacherId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String     @id @default(cuid())
+  subjectId   String
+  teacherId   String
+  schoolYearId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher   User       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  schoolYear SchoolYear? @relation(fields: [schoolYearId], references: [id], onDelete: SetNull)
 
   @@unique([subjectId, teacherId])
   @@index([subjectId])
   @@index([teacherId])
+  @@index([schoolYearId])
 }
 
 model Class {
@@ -140,10 +144,8 @@ model Class {
   section          String
   isIrregular      Boolean           @default(false)
   dayAndTime       String?
-  room             String?
   classSize        Int?
   departmentHead   String?
-  vpAcademics      String?
   subjectId        String
   teacherId        String
   schoolYearId     String

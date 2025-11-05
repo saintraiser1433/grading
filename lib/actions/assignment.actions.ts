@@ -12,10 +12,8 @@ export interface CreateAssignmentInput {
   section: string
   name?: string
   dayAndTime?: string
-  room?: string
   classSize?: number
   departmentHead?: string
-  vpAcademics?: string
   isIrregular?: boolean
 }
 
@@ -68,11 +66,12 @@ export async function createTeacherSubjectAssignment(data: CreateAssignmentInput
       return { success: false, error: "A class with this subject, section, and school year already exists" }
     }
 
-    // First, create the subject assignment
+    // First, create the subject assignment with school year
     const subjectAssignment = await prisma.subjectAssignment.create({
       data: {
         subjectId: data.subjectId,
-        teacherId: data.teacherId
+        teacherId: data.teacherId,
+        schoolYearId: data.schoolYearId
       }
     })
 
@@ -85,10 +84,8 @@ export async function createTeacherSubjectAssignment(data: CreateAssignmentInput
         teacherId: data.teacherId,
         schoolYearId: data.schoolYearId,
         dayAndTime: data.dayAndTime,
-        room: data.room,
         classSize: data.classSize,
         departmentHead: data.departmentHead,
-        vpAcademics: data.vpAcademics,
         isIrregular: data.isIrregular || false
       },
       include: {
@@ -245,14 +242,12 @@ export async function updateTeacherAssignment(classId: string, data: Partial<Cre
     const updatedClass = await prisma.class.update({
       where: { id: classId },
       data: {
-        ...(data.section && { section: data.section }),
-        ...(data.name && { name: data.name }),
-        ...(data.dayAndTime && { dayAndTime: data.dayAndTime }),
-        ...(data.room && { room: data.room }),
-        ...(data.classSize && { classSize: data.classSize }),
-        ...(data.departmentHead && { departmentHead: data.departmentHead }),
-        ...(data.vpAcademics && { vpAcademics: data.vpAcademics }),
-        ...(data.isIrregular !== undefined && { isIrregular: data.isIrregular })
+          ...(data.section && { section: data.section }),
+          ...(data.name && { name: data.name }),
+          ...(data.dayAndTime && { dayAndTime: data.dayAndTime }),
+          ...(data.classSize && { classSize: data.classSize }),
+          ...(data.departmentHead && { departmentHead: data.departmentHead }),
+          ...(data.isIrregular !== undefined && { isIrregular: data.isIrregular })
       },
       include: {
         teacher: {

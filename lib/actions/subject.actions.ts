@@ -116,19 +116,100 @@ export async function getOpenSubjects() {
       return { success: true, data: [] }
     }
 
-    const subjects = await prisma.subject.findMany({
+    // Get all subjects that have classes or assignments in the active school year
+    // First, get subjects with classes in the active school year
+    const subjectsWithClasses = await prisma.subject.findMany({
       where: { 
-        isOpen: true,
-        schoolYearId: activeSchoolYear.id
+        classes: {
+          some: {
+            schoolYearId: activeSchoolYear.id
+          }
+        }
       },
       include: {
         schoolYear: true,
+        classes: {
+          where: {
+            schoolYearId: activeSchoolYear.id
+          },
+          include: {
+            teacher: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            classes: true
+          }
+        }
       },
       orderBy: { code: "asc" },
     })
 
-    return { success: true, data: subjects }
+    // Also get subjects assigned to teachers for this school year (via SubjectAssignment)
+    const assignments = await prisma.subjectAssignment.findMany({
+      where: {
+        schoolYearId: activeSchoolYear.id
+      },
+      include: {
+        subject: {
+          include: {
+            schoolYear: true,
+            classes: {
+              where: {
+                schoolYearId: activeSchoolYear.id
+              },
+              include: {
+                teacher: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  }
+                }
+              }
+            },
+            _count: {
+              select: {
+                classes: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    // Combine subjects from both sources
+    const subjectMap = new Map()
+    
+    // Add subjects with classes
+    subjectsWithClasses.forEach(subject => {
+      subjectMap.set(subject.id, subject)
+    })
+    
+    // Add subjects from assignments
+    assignments.forEach(assignment => {
+      if (!subjectMap.has(assignment.subject.id)) {
+        subjectMap.set(assignment.subject.id, assignment.subject)
+      }
+    })
+
+    // Convert map to array and filter to only include subjects with classes
+    const allSubjects = Array.from(subjectMap.values())
+    const subjectsWithAvailableClasses = allSubjects.filter(
+      subject => subject.classes.length > 0
+    )
+
+    return { success: true, data: subjectsWithAvailableClasses }
   } catch (error) {
+    console.error("Error fetching open subjects:", error)
     return { success: false, error: "Failed to fetch open subjects" }
   }
 }
@@ -204,21 +285,20 @@ export async function assignSubjectToTeacher(subjectId: string, teacherId: strin
 }
 
 // New functions for many-to-many subject assignments
-export async function assignSubjectToTeacherManyToMany(subjectId: string, teacherId: string) {
+export async function assignSubjectToTeacherManyToMany(
+  subjectId: string, 
+  teacherId: string,
+  course?: string,
+  section?: string,
+  dayTime?: string,
+  size?: string,
+  schoolYearId?: string,
+  departmentHeadId?: string,
+  departmentId?: string
+) {
   try {
-    // Check if assignment already exists
-    const existingAssignment = await prisma.subjectAssignment.findUnique({
-      where: {
-        subjectId_teacherId: {
-          subjectId,
-          teacherId,
-        },
-      },
-    })
-
-    if (existingAssignment) {
-      return { success: false, error: "Subject is already assigned to this teacher" }
-    }
+    // Note: We allow multiple classes per assignment, so we don't check for existing assignment here
+    // The assignment will be created if it doesn't exist, or reused if it does
 
     // Get subject details for class creation
     const subject = await prisma.subject.findUnique({
@@ -241,40 +321,81 @@ export async function assignSubjectToTeacherManyToMany(subjectId: string, teache
       return { success: false, error: "Teacher not found" }
     }
 
+    // Validate schoolYearId
+    const targetSchoolYearId = schoolYearId || subject.schoolYearId
+    if (!targetSchoolYearId) {
+      return { success: false, error: "School year is required" }
+    }
+
+    // Get department head name if departmentHeadId is provided
+    let departmentHeadName: string | null = null
+    if (departmentHeadId) {
+      const deptHead = await prisma.departmentHead.findUnique({
+        where: { id: departmentHeadId },
+      })
+      departmentHeadName = deptHead?.name || null
+    }
+
     // Use transaction to create both assignment and class
     const result = await prisma.$transaction(async (tx) => {
-      // Create the subject assignment
-      const assignment = await tx.subjectAssignment.create({
-        data: {
+      // Check if assignment already exists, if not create it
+      let assignment = await tx.subjectAssignment.findFirst({
+        where: {
           subjectId,
           teacherId,
-        },
-        include: {
-          subject: {
-            include: {
-              schoolYear: true,
-            },
-          },
-          teacher: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
+          schoolYearId: targetSchoolYearId,
         },
       })
 
-      // Create a class automatically
-      const classData = await tx.class.create({
-        data: {
-          name: `${subject.code} - Class`,
-          section: "A", // Default section
-          isIrregular: false,
-          subjectId: subject.id,
-          teacherId: teacher.id,
-          schoolYearId: subject.schoolYearId || undefined,
+      if (!assignment) {
+        // Create the subject assignment if it doesn't exist
+        assignment = await tx.subjectAssignment.create({
+          data: {
+            subjectId,
+            teacherId,
+            schoolYearId: targetSchoolYearId,
+          },
+        })
+      }
+
+      // Determine section - use provided section or find an available one
+      let classSection = section?.trim() || ""
+      
+      if (!classSection) {
+        // Find existing sections for this subject and school year
+        const existingClasses = await tx.class.findMany({
+          where: {
+            subjectId: subject.id,
+            schoolYearId: targetSchoolYearId,
+          },
+          select: { section: true },
+        })
+        
+        const existingSections = new Set(existingClasses.map(c => c.section.toUpperCase()))
+        
+        // Try to find an available section (A, B, C, etc.)
+        const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+        for (const sec of sections) {
+          if (!existingSections.has(sec)) {
+            classSection = sec
+            break
+          }
+        }
+        
+        // If all sections are taken, use teacher's initial
+        if (!classSection) {
+          classSection = teacher.firstName?.[0]?.toUpperCase() || teacher.lastName?.[0]?.toUpperCase() || "X"
+        }
+      }
+
+      // Check if a class with this subject, section, and school year already exists
+      let classData = await tx.class.findUnique({
+        where: {
+          subjectId_section_schoolYearId: {
+            subjectId: subject.id,
+            section: classSection,
+            schoolYearId: targetSchoolYearId,
+          },
         },
         include: {
           subject: true,
@@ -282,6 +403,50 @@ export async function assignSubjectToTeacherManyToMany(subjectId: string, teache
           schoolYear: true,
         },
       })
+
+      if (!classData) {
+        // Class doesn't exist, create it
+        const className = course?.trim() || `${subject.code} - Class`
+        classData = await tx.class.create({
+          data: {
+            name: className,
+            section: classSection,
+            isIrregular: false,
+            dayAndTime: dayTime?.trim() || null,
+            classSize: size ? parseInt(size) || null : null,
+            departmentHead: departmentHeadName,
+            departmentId: departmentId || null,
+            subjectId: subject.id,
+            teacherId: teacher.id,
+            schoolYearId: targetSchoolYearId,
+          },
+          include: {
+            subject: true,
+            teacher: true,
+            schoolYear: true,
+          },
+        })
+      } else {
+        // Class exists, optionally update class info if provided
+        if (dayTime?.trim() || size || departmentHeadName || departmentId) {
+          classData = await tx.class.update({
+            where: {
+              id: classData.id,
+            },
+            data: {
+              ...(dayTime?.trim() && { dayAndTime: dayTime.trim() }),
+              ...(size && { classSize: parseInt(size) || null }),
+              ...(departmentHeadName && { departmentHead: departmentHeadName }),
+              ...(departmentId && { departmentId: departmentId }),
+            },
+            include: {
+              subject: true,
+              teacher: true,
+              schoolYear: true,
+            },
+          })
+        }
+      }
 
       return { assignment, classData }
     })
@@ -292,19 +457,55 @@ export async function assignSubjectToTeacherManyToMany(subjectId: string, teache
     revalidatePath("/teacher")
     
     return { success: true, data: result.assignment }
-  } catch (error) {
-    return { success: false, error: "Failed to assign subject and create class" }
+  } catch (error: any) {
+    console.error("Error assigning subject:", error)
+    // Check for unique constraint violation
+    if (error.code === 'P2002') {
+      return { success: false, error: "A class with this subject, section, and school year already exists. Please use a different section." }
+    }
+    return { success: false, error: error.message || "Failed to assign subject and create class" }
   }
 }
 
 export async function removeSubjectFromTeacher(subjectId: string, teacherId: string) {
   try {
-    await prisma.subjectAssignment.delete({
+    // Find all classes associated with this subject-teacher pair
+    const classes = await prisma.class.findMany({
       where: {
-        subjectId_teacherId: {
-          subjectId,
-          teacherId,
+        subjectId,
+        teacherId,
+      },
+      include: {
+        _count: {
+          select: {
+            enrollments: true,
+          },
         },
+      },
+    })
+
+    // Check if any classes have enrollments
+    const classesWithEnrollments = classes.filter(c => c._count.enrollments > 0)
+    if (classesWithEnrollments.length > 0) {
+      return { 
+        success: false, 
+        error: `Cannot remove assignment: ${classesWithEnrollments.length} class(es) have enrolled students. Please remove students first.` 
+      }
+    }
+
+    // Delete all classes associated with this subject-teacher pair
+    await prisma.class.deleteMany({
+      where: {
+        subjectId,
+        teacherId,
+      },
+    })
+
+    // Delete the subject assignment using deleteMany
+    await prisma.subjectAssignment.deleteMany({
+      where: {
+        subjectId,
+        teacherId,
       },
     })
 
@@ -314,6 +515,7 @@ export async function removeSubjectFromTeacher(subjectId: string, teacherId: str
     
     return { success: true }
   } catch (error) {
+    console.error("Error removing subject assignment:", error)
     return { success: false, error: "Failed to remove subject assignment" }
   }
 }
@@ -341,6 +543,20 @@ export async function getSubjectsWithAssignments() {
                 email: true,
               },
             },
+            schoolYear: true,
+          },
+        },
+        classes: {
+          include: {
+            teacher: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+            schoolYear: true,
           },
         },
         _count: {
@@ -359,23 +575,26 @@ export async function getSubjectsWithAssignments() {
   }
 }
 
-export async function getSubjectsAssignedToTeacherManyToMany(teacherId: string) {
+export async function getSubjectsAssignedToTeacherManyToMany(teacherId: string, schoolYearId?: string) {
   try {
-    // Get the active school year first
-    const activeSchoolYear = await prisma.schoolYear.findFirst({
-      where: { isActive: true },
-    })
-
-    if (!activeSchoolYear) {
-      return { success: true, data: [] }
+    // Get the active school year if no schoolYearId provided
+    let targetSchoolYearId = schoolYearId
+    if (!targetSchoolYearId) {
+      const activeSchoolYear = await prisma.schoolYear.findFirst({
+        where: { isActive: true },
+      })
+      targetSchoolYearId = activeSchoolYear?.id
     }
 
     const assignments = await prisma.subjectAssignment.findMany({
       where: { 
         teacherId,
-        subject: {
-          schoolYearId: activeSchoolYear.id
-        }
+        ...(targetSchoolYearId && {
+          OR: [
+            { schoolYearId: targetSchoolYearId },
+            { subject: { schoolYearId: targetSchoolYearId } }
+          ]
+        })
       },
       include: {
         subject: {
@@ -388,6 +607,7 @@ export async function getSubjectsAssignedToTeacherManyToMany(teacherId: string) 
             },
           },
         },
+        schoolYear: true,
       },
       orderBy: {
         subject: {

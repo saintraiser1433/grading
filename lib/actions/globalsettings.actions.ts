@@ -65,5 +65,11 @@ export async function setVpAcademics(name: string) {
   return await setGlobalSetting("VP_ACADEMICS", name, "Vice President for Academics")
 }
 
+export async function getRegistrar() {
+  const result = await getGlobalSetting("REGISTRAR")
+  return result.success ? result.data?.value || "" : ""
+}
 
-
+export async function setRegistrar(name: string) {
+  return await setGlobalSetting("REGISTRAR", name, "Registrar Name")
+}

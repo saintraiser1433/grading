@@ -124,14 +124,6 @@ export function RegisterForm() {
               
               if (uploadResult.success) {
                 // Save document metadata to database
-                  userId: result.data?.id || "",
-                  fileName: uploadResult.data.fileName,
-                  fileUrl: uploadResult.data.filePath,
-                  fileType: uploadResult.data.fileType,
-                  fileSize: uploadResult.data.fileSize,
-                  documentType: documentTypes[i],
-                })
-                
                 const docResult = await uploadEnrollmentDocument({
                   userId: result.data?.id || "",
                   fileName: uploadResult.data.fileName,
