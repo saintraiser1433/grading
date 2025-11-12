@@ -25,13 +25,16 @@ export async function GET(request: NextRequest) {
     // Verify teacher owns this class and get class data
     const classData = await prisma.class.findUnique({
       where: { id: classId },
-      include: {
-        schoolYear: true
-      },
       select: {
         teacherId: true,
-        schoolYear: true,
-        schoolYearId: true
+        schoolYearId: true,
+        schoolYear: {
+          select: {
+            id: true,
+            year: true,
+            semester: true
+          }
+        }
       }
     })
 

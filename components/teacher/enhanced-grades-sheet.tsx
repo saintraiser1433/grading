@@ -367,10 +367,13 @@ export function EnhancedGradesSheet({
       try {
         setIsLoadingComponents(true)
         
+        console.log("🔄 Loading component scores from database...")
         const response = await fetch(`/api/grades/load-component-scores?classId=${classId}&gradeTypeId=${gradeType.id}`)
         const result = await response.json()
         
         if (result.success) {
+          console.log("✅ Component scores loaded from DB:", result.scores)
+          
           const scoresMap = new Map()
           Object.entries(result.scores).forEach(([studentId, scores]) => {
             scoresMap.set(studentId, new Map(Object.entries(scores as Record<string, unknown>)))
@@ -378,18 +381,19 @@ export function EnhancedGradesSheet({
           
           setComponentScores(scoresMap)
           
-          // Also update local studentScores state so UI can display them
-          setStudentScores(prev => {
-            const newScores = new Map(prev)
-            Object.entries(result.scores).forEach(([studentId, scores]) => {
-              const studentMap = new Map()
-              Object.entries(scores as Record<string, unknown>).forEach(([componentId, scoreData]) => {
-                studentMap.set(componentId, (scoreData as { score: number }).score)
-              })
-              newScores.set(studentId, studentMap)
+          // IMPORTANT: Update studentScores to reflect what's in the database
+          // This ensures the UI shows persisted data, not just in-memory changes
+          const newStudentScores = new Map()
+          Object.entries(result.scores).forEach(([studentId, scores]) => {
+            const studentMap = new Map()
+            Object.entries(scores as Record<string, unknown>).forEach(([componentId, scoreData]) => {
+              studentMap.set(componentId, (scoreData as { score: number }).score)
             })
-            return newScores
+            newStudentScores.set(studentId, studentMap)
           })
+          setStudentScores(newStudentScores) // Replace, don't merge
+          
+          console.log("✅ Component scores loaded successfully for", newStudentScores.size, "students")
         } else {
           console.error("❌ API returned error:", result.error)
         }
@@ -716,6 +720,8 @@ export function EnhancedGradesSheet({
     }
 
     try {
+      console.log("📤 Creating component:", { criteriaId, name: newComponent.name, maxScore: newComponent.maxScore, classId })
+      
       const response = await fetch('/api/grades/class-components', {
         method: 'POST',
         headers: {
@@ -725,50 +731,29 @@ export function EnhancedGradesSheet({
           criteriaId,
           name: newComponent.name.toUpperCase(),
           maxScore: newComponent.maxScore,
-          order: 0
+          order: 0,
+          classId // Include classId for validation
         })
       })
 
       const result = await response.json()
+      console.log("📥 Component creation result:", result)
 
-      if (result.success) {
-        // Add the new component directly to state for immediate UI update
-        if (result.data) {
-          const newComp: Component = {
-            id: result.data.id,
-            name: result.data.name,
-            maxScore: result.data.maxScore,
-            criteriaId: criteriaId
-          }
-          
-          setComponents(prev => {
-            const updated = new Map(prev)
-            if (!updated.has(criteriaId)) {
-              updated.set(criteriaId, [])
-            }
-            const existing = updated.get(criteriaId) || []
-            // Check if component already exists to avoid duplicates
-            if (!existing.find(c => c.id === newComp.id)) {
-              updated.set(criteriaId, [...existing, newComp])
-            }
-            return updated
-          })
-        }
-        
-        // Also reload components from database to ensure consistency
-        // Use a small delay to allow the database to commit
-        setTimeout(async () => {
-          await loadClassComponents()
-        }, 300)
-        
+      if (result.success && result.data) {
+        // Close dialog and reset form first
         setAddComponentDialog(null)
         setNewComponent({ name: "", maxScore: 10 })
         
+        // Reload all components from database to get the persisted data
+        console.log("🔄 Reloading components from database...")
+        await loadClassComponents()
+        
         toast({
-          title: "✓ Component Added",
-          description: `Added ${newComponent.name}`,
+          title: "✓ Component Added Successfully",
+          description: `${result.data.name} has been saved to the database`,
         })
       } else {
+        console.error("❌ Component creation failed:", result.error)
         toast({
           title: "Error",
           description: result.error || "Failed to add component",
@@ -776,10 +761,10 @@ export function EnhancedGradesSheet({
         })
       }
     } catch (error) {
-      console.error("Error adding component:", error)
+      console.error("❌ Error adding component:", error)
       toast({
         title: "Error",
-        description: "Failed to add component",
+        description: "Failed to add component. Please try again.",
         variant: "destructive",
       })
     }
@@ -1930,7 +1915,12 @@ export function EnhancedGradesSheet({
           allComponentScores[studentId] = studentComponentScores
         })
         
-        console.log("All component scores:", allComponentScores)
+        console.log("📊 All component scores to save:", allComponentScores)
+        console.log("📊 Total students with scores:", Object.keys(allComponentScores).length)
+        
+        // Debug: Check if we have any scores at all
+        const totalScoresCount = Object.values(allComponentScores).reduce((sum, scores) => sum + Object.keys(scores).length, 0)
+        console.log("📊 Total component scores across all students:", totalScoresCount)
         
         // Save grades for all students
         let successCount = 0
@@ -1973,21 +1963,28 @@ export function EnhancedGradesSheet({
               }
             }
 
+            const requestPayload = {
+              enrollmentId: enrollment.id,
+              classId,
+              studentId: enrollment.student.id,
+              gradeTypeId: gradeType.id,
+              finalGrade,
+              remarks,
+              status: studentStatusValue,
+              allComponentScores
+            }
+            
+            console.log(`📤 Sending save request for student ${enrollment.studentId}:`, {
+              ...requestPayload,
+              componentScoresCount: allComponentScores[enrollment.student.id] ? Object.keys(allComponentScores[enrollment.student.id]).length : 0
+            })
+
             const response = await fetch('/api/real-save', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({
-                enrollmentId: enrollment.id,
-                classId,
-                studentId: enrollment.student.id,
-                gradeTypeId: gradeType.id,
-                finalGrade,
-                remarks,
-                status: studentStatusValue,
-                allComponentScores
-              })
+              body: JSON.stringify(requestPayload)
             })
 
             if (!response.ok) {
@@ -2016,12 +2013,15 @@ export function EnhancedGradesSheet({
         if (successCount > 0 && errorCount === 0) {
           toast({
             title: "✓ All Grades Saved Successfully",
-            description: `Successfully saved grades for ${successCount} students`,
+            description: `Successfully saved grades for ${successCount} students to the database`,
           })
-          // Reload existing grades and component scores to show the updated data
+          // Reload existing grades and component scores to verify database persistence
+          console.log("🔄 Reloading data from database to verify save...")
           await loadExistingGrades()
           await loadComponentScores()
+          await loadClassComponents()
           router.refresh()
+          console.log("✅ Data reloaded from database after save")
         } else if (successCount > 0 && errorCount > 0) {
           toast({
             title: "⚠️ Partial Success",
@@ -2029,8 +2029,10 @@ export function EnhancedGradesSheet({
             variant: "destructive",
           })
           // Still reload to show what was saved
+          console.log("🔄 Reloading data from database...")
           await loadExistingGrades()
           await loadComponentScores()
+          await loadClassComponents()
           router.refresh()
         } else {
           toast({
