@@ -25,16 +25,19 @@ interface ApproveSubmissionFormProps {
   submissionId: string
   approverId: string
   submission: any
+  defaultAction?: "approve" | "decline"
 }
 
-export function ApproveSubmissionForm({ submissionId, approverId, submission }: ApproveSubmissionFormProps) {
+export function ApproveSubmissionForm({ submissionId, approverId, submission, defaultAction }: ApproveSubmissionFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [comments, setComments] = useState("")
-  const [action, setAction] = useState<"approve" | "decline" | null>(null)
+  const [action, setAction] = useState<"approve" | "decline" | null>(defaultAction || null)
   const [showApproveDialog, setShowApproveDialog] = useState(false)
   const [showDeclineDialog, setShowDeclineDialog] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  
+  const isDeclineMode = defaultAction === "decline"
 
   const handleApproveClick = () => {
     setShowApproveDialog(true)
@@ -77,6 +80,12 @@ export function ApproveSubmissionForm({ submissionId, approverId, submission }: 
   }
 
   const handleDeclineClick = () => {
+    // Open dialog first, check for comments when submitting
+    setShowDeclineDialog(true)
+  }
+
+  const handleDecline = async () => {
+    // Check for comments before submitting
     if (!comments.trim()) {
       toast({
         title: "Comments Required",
@@ -84,12 +93,10 @@ export function ApproveSubmissionForm({ submissionId, approverId, submission }: 
         variant: "destructive",
         duration: 5000,
       })
+      setShowDeclineDialog(false)
       return
     }
-    setShowDeclineDialog(true)
-  }
-
-  const handleDecline = async () => {
+    
     setIsLoading(true)
     setAction("decline")
     setShowDeclineDialog(false)
@@ -129,51 +136,82 @@ export function ApproveSubmissionForm({ submissionId, approverId, submission }: 
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <CheckCircle className="h-5 w-5 text-green-600" />
-          Approve Grade Submission
+          {isDeclineMode ? (
+            <>
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              Decline Grade Submission
+            </>
+          ) : (
+            <>
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Approve Grade Submission
+            </>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-green-800 dark:text-green-200">
-                Ready to Approve
-              </h4>
-              <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                Once approved, these grades will be visible to students and included in their grade calculations.
-              </p>
+        {isDeclineMode ? (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-red-800 dark:text-red-200">
+                  Declining Submission
+                </h4>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                  This will return the submission to the teacher for revision. The teacher will be notified and can resubmit after making changes.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-green-800 dark:text-green-200">
+                  Ready to Approve
+                </h4>
+                <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                  Once approved, these grades will be visible to students and included in their grade calculations.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-2">
-          <Label htmlFor="comments">Approval Comments (Optional)</Label>
+          <Label htmlFor="comments">
+            {isDeclineMode ? "Decline Comments" : "Approval Comments"} {isDeclineMode && "*"}
+          </Label>
           <Textarea
             id="comments"
-            placeholder="Add any comments about this grade submission..."
+            placeholder={isDeclineMode ? "Please provide a reason for declining this submission..." : "Add any comments about this grade submission..."}
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             rows={3}
+            required={isDeclineMode}
           />
           <p className="text-sm text-gray-500">
-            Comments will be visible to the teacher and included in the submission history.
+            {isDeclineMode 
+              ? "Comments are required when declining a submission. These will be shared with the teacher."
+              : "Comments will be visible to the teacher and included in the submission history."}
           </p>
         </div>
 
         <div className="flex items-center gap-4 pt-4">
-          <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-            <AlertDialogTrigger asChild>
-              <Button
-                onClick={handleApproveClick}
-                disabled={isLoading}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                {isLoading && action === "approve" ? "Approving..." : "Approve Submission"}
-              </Button>
-            </AlertDialogTrigger>
+          {!isDeclineMode && (
+            <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+              <AlertDialogTrigger asChild>
+                <Button
+                  onClick={handleApproveClick}
+                  disabled={isLoading}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  {isLoading && action === "approve" ? "Approving..." : "Approve Submission"}
+                </Button>
+              </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2">
@@ -209,14 +247,15 @@ export function ApproveSubmissionForm({ submissionId, approverId, submission }: 
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          )}
           
           <AlertDialog open={showDeclineDialog} onOpenChange={setShowDeclineDialog}>
             <AlertDialogTrigger asChild>
               <Button
-                variant="outline"
+                variant={isDeclineMode ? "default" : "outline"}
                 onClick={handleDeclineClick}
                 disabled={isLoading}
-                className="text-red-600 border-red-600 hover:bg-red-50"
+                className={isDeclineMode ? "bg-red-600 hover:bg-red-700" : "text-red-600 border-red-600 hover:bg-red-50"}
               >
                 <AlertCircle className="mr-2 h-4 w-4" />
                 {isLoading && action === "decline" ? "Declining..." : "Decline Submission"}
@@ -249,7 +288,7 @@ export function ApproveSubmissionForm({ submissionId, approverId, submission }: 
                 <AlertDialogAction
                   onClick={handleDecline}
                   className="bg-red-600 hover:bg-red-700"
-                  disabled={isLoading}
+                  disabled={isLoading || !comments.trim()}
                 >
                   <AlertCircle className="mr-2 h-4 w-4" />
                   {isLoading ? "Declining..." : "Decline Submission"}
@@ -258,22 +297,6 @@ export function ApproveSubmissionForm({ submissionId, approverId, submission }: 
             </AlertDialogContent>
           </AlertDialog>
         </div>
-
-        {action === "decline" && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-              <div>
-                <h4 className="font-medium text-red-800 dark:text-red-200">
-                  Declining Submission
-                </h4>
-                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                  This will return the submission to the teacher for revision. The teacher will be notified and can resubmit after making changes.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   )

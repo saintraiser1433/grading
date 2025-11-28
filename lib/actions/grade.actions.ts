@@ -287,6 +287,36 @@ export async function getPendingGradeSubmissions() {
   }
 }
 
+export async function getApprovedGradeSubmissions() {
+  try {
+    const submissions = await prisma.gradeSubmission.findMany({
+      where: { status: "APPROVED" },
+      include: {
+        class: {
+          include: {
+            subject: true,
+            teacher: true,
+          },
+        },
+        gradeType: true,
+        schoolYear: true,
+        approver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: { approvedAt: "desc" },
+    })
+
+    return { success: true, data: submissions }
+  } catch (error) {
+    return { success: false, error: "Failed to fetch approved submissions" }
+  }
+}
+
 export async function approveGradeSubmission(id: string, approverId: string, comments?: string) {
   try {
     const submission = await prisma.gradeSubmission.update({

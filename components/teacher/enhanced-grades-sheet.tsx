@@ -1190,25 +1190,6 @@ export function EnhancedGradesSheet({
             </div>
           </div>
 
-          <!-- Grading Scale -->
-          <div style="margin-bottom: 12px;">
-            <h3 style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold;">Grading Scale (1.0 - 5.0)</h3>
-            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; font-size: 8px;">
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.0<br/>(98-100%)<br/>Excellent</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d1ecf1;">1.25<br/>(95-97%)<br/>Excellent</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.5<br/>(92-94%)<br/>Very Good</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d1ecf1;">1.75<br/>(89-91%)<br/>Very Good</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #cce5ff;">2.0<br/>(86-88%)<br/>Good</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #cce5ff;">2.25<br/>(83-85%)<br/>Good</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #e2e3e5;">2.5<br/>(80-82%)<br/>Satisfactory</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #e2e3e5;">2.75<br/>(77-79%)<br/>Satisfactory</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fff3cd;">3.0<br/>(75-76%)<br/>Passing</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #f8d7da;">5.0<br/>(Below 75%)<br/>Failed</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #ffeaa7;">INC<br/>(Incomplete)<br/>Incomplete</div>
-              <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fab1a0;">DROPPED<br/>(Dropped)<br/>Dropped</div>
-            </div>
-          </div>
-
           <!-- Grades Table -->
           <div style="overflow: visible; width: 100%;">
             <table style="width: 100%; border-collapse: collapse; font-size: ${baseFontSize}px; border: 0.25px solid #333; table-layout: ${useLandscape ? 'auto' : 'fixed'}; min-width: fit-content; vertical-align: middle;">
@@ -1440,25 +1421,6 @@ export function EnhancedGradesSheet({
               </div>
             </div>
 
-            <!-- Grading Scale -->
-            <div style="margin-bottom: 12px;">
-              <h3 style="margin: 0 0 6px 0; font-size: 11px; font-weight: bold;">Grading Scale (1.0 - 5.0)</h3>
-              <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; font-size: 8px;">
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.0<br/>(98-100%)<br/>Excellent</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d1ecf1;">1.25<br/>(95-97%)<br/>Excellent</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d4edda;">1.5<br/>(92-94%)<br/>Very Good</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #d1ecf1;">1.75<br/>(89-91%)<br/>Very Good</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #cce5ff;">2.0<br/>(86-88%)<br/>Good</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #cce5ff;">2.25<br/>(83-85%)<br/>Good</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #e2e3e5;">2.5<br/>(80-82%)<br/>Satisfactory</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #e2e3e5;">2.75<br/>(77-79%)<br/>Satisfactory</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fff3cd;">3.0<br/>(75-76%)<br/>Passing</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #f8d7da;">5.0<br/>(Below 75%)<br/>Failed</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #ffeaa7;">INC<br/>(Incomplete)<br/>Incomplete</div>
-                <div style="border: 0.25px solid #ccc; padding: 3px; text-align: center; background: #fab1a0;">DROPPED<br/>(Dropped)<br/>Dropped</div>
-              </div>
-            </div>
-
             <!-- Grades Table -->
             <div style="overflow: visible; width: 100%;">
               <table style="width: 100%; border-collapse: collapse; font-size: ${baseFontSize}px; border: 0.25px solid #333; table-layout: ${useLandscape ? 'auto' : 'fixed'}; min-width: fit-content; vertical-align: middle;">
@@ -1605,39 +1567,9 @@ export function EnhancedGradesSheet({
             </div>
         `
 
-        // Only add statistics and signature section on the last page
+        // Only add signature section on the last page
         if (isLastPage) {
           pageContent += `
-            <!-- Statistics Summary -->
-            <div style="margin-top: 20px; padding: 15px; border: 1px solid #333; background: #f0f4ff; border-radius: 5px;">
-              <h3 style="text-align: center; font-weight: bold; font-size: ${baseFontSize + 2}px; margin-bottom: 12px;">CLASS STATISTICS SUMMARY</h3>
-              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px;">
-                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #ff9800; border-radius: 5px;">
-                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #e65100;">${droppedCountPDF}</div>
-                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">Dropped</div>
-                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #ff9800; margin-top: 4px;">${droppedPercentagePDF}%</div>
-                </div>
-                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #ffc107; border-radius: 5px;">
-                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #f57c00;">${incCountPDF}</div>
-                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">INC</div>
-                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #ffc107; margin-top: 4px;">${incPercentagePDF}%</div>
-                </div>
-                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #4caf50; border-radius: 5px;">
-                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #2e7d32;">${passedCountPDF}</div>
-                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">Passed</div>
-                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #4caf50; margin-top: 4px;">${passedPercentagePDF}%</div>
-                </div>
-                <div style="text-align: center; padding: 10px; background: white; border: 2px solid #f44336; border-radius: 5px;">
-                  <div style="font-size: ${baseFontSize + 4}px; font-weight: bold; color: #c62828;">${failedCountPDF}</div>
-                  <div style="font-size: ${baseFontSize}px; color: #666; margin-top: 4px;">Failed</div>
-                  <div style="font-size: ${baseFontSize - 1}px; font-weight: bold; color: #f44336; margin-top: 4px;">${failedPercentagePDF}%</div>
-                </div>
-              </div>
-              <div style="text-align: center; margin-top: 8px; font-size: ${baseFontSize}px; color: #666;">
-                Total Students: <span style="font-weight: bold;">${totalStudentsPDF}</span>
-              </div>
-            </div>
-
             <!-- Signature Section -->
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 24px;">

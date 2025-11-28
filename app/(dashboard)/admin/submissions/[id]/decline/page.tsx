@@ -1,21 +1,19 @@
 import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 import { authOptions } from "@/lib/auth"
-import { getVpAcademics, getRegistrar } from "@/lib/actions/globalsettings.actions"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Clock, FileText, User, Calendar, ArrowLeft } from "lucide-react"
+import { AlertCircle, ArrowLeft, FileText, User, Calendar } from "lucide-react"
 import Link from "next/link"
-import { EnhancedGradesSheet } from "@/components/teacher/enhanced-grades-sheet"
-import { SubmissionActionButtons } from "@/components/admin/submission-action-buttons"
+import { ApproveSubmissionForm } from "@/components/admin/approve-submission-form"
 
-interface SubmissionPageProps {
+interface DeclinePageProps {
   params: { id: string }
 }
 
-export default async function SubmissionReviewPage({ params }: SubmissionPageProps) {
+export default async function DeclineSubmissionPage({ params }: DeclinePageProps) {
   const session = await getServerSession(authOptions)
 
   if (!session || session.user.role !== "ADMIN") {
@@ -53,59 +51,38 @@ export default async function SubmissionReviewPage({ params }: SubmissionPagePro
     )
   }
 
-  // Get enrollments for this class - only approved enrollments should appear in grading sheet
-  const enrollments = await prisma.enrollment.findMany({
-    where: {
-      classId: submission.classId,
-      status: "APPROVED"
-    },
-    include: {
-      student: true,
-      grades: {
-        where: {
-          gradeTypeId: submission.gradeTypeId
-        },
-        include: {
-          gradeType: true
-        }
-      }
-    }
-  })
-
-  // Get grading criteria for this class and grade type
-  const criteria = await prisma.globalGradingCriteria.findMany({
-    where: {
-      gradeTypeId: submission.gradeTypeId,
-      isActive: true
-    },
-    orderBy: { order: "asc" }
-  })
-
-  // Construct proper classData object with schoolYear included
-  const classData = {
-    ...submission.class,
-    schoolYear: submission.schoolYear
+  if (submission.status !== "PENDING") {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold text-gray-900">Submission Already Processed</h1>
+          <p className="text-gray-500 mt-2">
+            This submission has already been {submission.status.toLowerCase()}.
+          </p>
+          <Button asChild className="mt-4">
+            <Link href="/admin/submissions">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Submissions
+            </Link>
+          </Button>
+        </div>
+      </div>
+    )
   }
-
-  // Fetch global settings
-  const [vpAcademicsGlobal, registrarGlobal] = await Promise.all([
-    getVpAcademics(),
-    getRegistrar(),
-  ])
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Review Grade Submission</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Decline Grade Submission</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Review grades before approving or declining
+            Review and decline this grade submission
           </p>
         </div>
         <Button variant="outline" asChild>
-          <Link href="/admin/submissions">
+          <Link href={`/admin/submissions/${submission.id}`}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Submissions
+            Back to Review
           </Link>
         </Button>
       </div>
@@ -133,15 +110,10 @@ export default async function SubmissionReviewPage({ params }: SubmissionPagePro
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                PENDING
-              </Badge>
-              <span className="text-sm text-gray-500">
-                {new Date(submission.submittedAt).toLocaleDateString()}
-              </span>
-            </div>
+            <Badge variant="outline" className="flex items-center gap-1">
+              <FileText className="h-3 w-3" />
+              PENDING APPROVAL
+            </Badge>
           </div>
         </CardHeader>
         <CardContent>
@@ -153,47 +125,20 @@ export default async function SubmissionReviewPage({ params }: SubmissionPagePro
               <span className="font-medium">Units:</span> {submission.class.subject.units}
             </div>
             <div>
-              <span className="font-medium">Students:</span> {enrollments.length}
-            </div>
-            <div>
               <span className="font-medium">Submitted:</span> {new Date(submission.submittedAt).toLocaleString()}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Grades Sheet */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Grade Sheet - {submission.gradeType?.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EnhancedGradesSheet
-            classId={submission.classId}
-            isMidterm={false}
-            enrollments={enrollments}
-            criteria={criteria}
-            classData={classData}
-            gradeType={submission.gradeType}
-            allGradeTypes={[submission.gradeType].filter(Boolean)}
-            isReadOnly={true}
-            showApprovalButtons={false}
-            submissionId={submission.id}
-            adminId={session.user.id}
-            vpAcademicsGlobal={vpAcademicsGlobal}
-            registrarGlobal={registrarGlobal}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      {submission.status === "PENDING" && (
-        <SubmissionActionButtons
-          submissionId={submission.id}
-          approverId={session.user.id}
-          submission={submission}
-        />
-      )}
+      {/* Decline Form */}
+      <ApproveSubmissionForm 
+        submissionId={submission.id}
+        approverId={session.user.id}
+        submission={submission}
+        defaultAction="decline"
+      />
     </div>
   )
 }
+
